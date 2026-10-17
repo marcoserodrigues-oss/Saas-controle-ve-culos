@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { Check, Pencil, Plus, Power, RefreshCw, Search, Truck, X } from "lucide-react";
+import { Pencil, Plus, Power, RefreshCw, Search, Truck, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
 type VehicleKind = "vehicle" | "equipment";
