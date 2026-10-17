@@ -15,23 +15,40 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
   const [memberships, setMemberships] = useState<Membership[]>([]);
   const [organizationId, setOrganizationId] = useState("");
   const [membershipCheck, setMembershipCheck] = useState(false);
+  const [forgotPasswordMode, setForgotPasswordMode] = useState(false);
+  const [recoveryMode, setRecoveryMode] = useState(false);
+  const [recoveryEmailSent, setRecoveryEmailSent] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   useEffect(() => {
     if (!supabase) { setChecking(false); return; }
+
+    // The recovery link may authenticate the user automatically. Keep the reset
+    // screen visible when Supabase signals a password-recovery flow.
+    if (window.location.hash.includes("type=recovery")) setRecoveryMode(true);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setRecoveryMode(true);
+        setForgotPasswordMode(false);
+        setError("");
+      }
+      setSession(nextSession);
+      if (event !== "PASSWORD_RECOVERY") setError("");
+    });
+
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
-      if (sessionError) setError(sessionError.message);
+      if (sessionError) setError("Não foi possível verificar a sessão. Tente novamente.");
       setSession(data.session);
       setChecking(false);
     });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
-      setError("");
-    });
+
     return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
-    if (!supabase || !session) {
+    if (!supabase || !session || recoveryMode) {
       setMemberships([]);
       setOrganizationId("");
       setMembershipCheck(false);
@@ -52,7 +69,7 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
         setMembershipCheck(false);
       });
     return () => { active = false; };
-  }, [session]);
+  }, [session, recoveryMode]);
 
   if (!isSupabaseConfigured || !supabase) {
     return <>{children({ organizationId: null, organizationName: null, userEmail: null, signOut: async () => {} })}</>;
@@ -67,13 +84,87 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
     setSubmitting(false);
   };
 
+  const requestPasswordReset = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError("");
+    setRecoveryEmailSent(false);
+    const { error: resetError } = await supabase!.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin,
+    });
+    if (resetError) {
+      setError("Não foi possível enviar o e-mail de recuperação. Confira o endereço e tente novamente.");
+    } else {
+      setRecoveryEmailSent(true);
+    }
+    setSubmitting(false);
+  };
+
+  const updatePassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    if (newPassword.length < 8) {
+      setError("A nova senha deve ter pelo menos 8 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setError("As senhas digitadas não coincidem.");
+      return;
+    }
+    setSubmitting(true);
+    const { error: updateError } = await supabase!.auth.updateUser({ password: newPassword });
+    if (updateError) {
+      setError("Não foi possível atualizar a senha. Solicite um novo link de recuperação e tente novamente.");
+      setSubmitting(false);
+      return;
+    }
+    setPassword("");
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setRecoveryMode(false);
+    setForgotPasswordMode(false);
+    setError("");
+    setSubmitting(false);
+  };
+
   const signOut = async () => {
     await supabase!.auth.signOut();
+    setSession(null);
     setMemberships([]);
     setOrganizationId("");
+    setRecoveryMode(false);
+    setForgotPasswordMode(false);
   };
 
   if (checking) return <div className="auth-screen"><div className="auth-card"><div className="auth-mark">FW</div><p>Verificando sessão segura...</p></div></div>;
+
+  if (recoveryMode) return <div className="auth-screen">
+    <form className="auth-card" onSubmit={updatePassword}>
+      <div className="auth-mark">FW</div>
+      <div className="auth-eyebrow">FLEETWISE · SEGURANÇA DA CONTA</div>
+      <h1>Crie uma nova senha</h1>
+      <p className="auth-description">Escolha uma senha nova para acessar sua conta com segurança.</p>
+      <label>Nova senha<input type="password" autoComplete="new-password" required minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Pelo menos 8 caracteres" /></label>
+      <label>Confirme a nova senha<input type="password" autoComplete="new-password" required minLength={8} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} placeholder="Digite a senha novamente" /></label>
+      {error && <div className="auth-error" role="alert">{error}</div>}
+      <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? "Salvando nova senha..." : "Salvar nova senha"}</button>
+      <div className="auth-footnote">Após salvar, sua conta continuará vinculada à organização existente.</div>
+    </form>
+  </div>;
+
+  if (!session && forgotPasswordMode) return <div className="auth-screen">
+    <form className="auth-card" onSubmit={requestPasswordReset}>
+      <div className="auth-mark">FW</div>
+      <div className="auth-eyebrow">FLEETWISE · RECUPERAÇÃO DE ACESSO</div>
+      <h1>Esqueceu sua senha?</h1>
+      <p className="auth-description">Informe seu e-mail cadastrado. Enviaremos um link para criar uma nova senha.</p>
+      <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@empresa.com" /></label>
+      {error && <div className="auth-error" role="alert">{error}</div>}
+      {recoveryEmailSent && <div className="auth-success" role="status">Se o e-mail estiver cadastrado, você receberá as instruções de recuperação. Abra o link neste mesmo navegador para definir a nova senha.</div>}
+      <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? "Enviando..." : "Enviar link de recuperação"}</button>
+      <button className="auth-text-button" type="button" onClick={() => { setForgotPasswordMode(false); setRecoveryEmailSent(false); setError(""); }}>Voltar para entrar</button>
+    </form>
+  </div>;
 
   if (!session) return <div className="auth-screen">
     <form className="auth-card" onSubmit={signIn}>
@@ -85,6 +176,7 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
       <label>Senha<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Sua senha" /></label>
       {error && <div className="auth-error" role="alert">{error}</div>}
       <button className="auth-submit" type="submit" disabled={submitting}>{submitting ? "Validando acesso..." : "Entrar com segurança"}</button>
+      <button className="auth-text-button" type="button" onClick={() => { setForgotPasswordMode(true); setError(""); }}>Esqueci minha senha</button>
       <div className="auth-footnote">Cadastro público desativado. O acesso exige usuário previamente provisionado e vínculo com uma organização.</div>
     </form>
   </div>;
