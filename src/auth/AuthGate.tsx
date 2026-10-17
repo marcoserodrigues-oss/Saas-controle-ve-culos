@@ -55,6 +55,9 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
       return;
     }
     let active = true;
+    // Never carry an organization selection across account/session changes.
+    setMemberships([]);
+    setOrganizationId("");
     setMembershipCheck(true);
     supabase.from("organization_members")
       .select("organization_id, role, organizations(name)")
