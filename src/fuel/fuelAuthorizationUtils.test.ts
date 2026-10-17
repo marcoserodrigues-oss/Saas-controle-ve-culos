@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  authorizationConsumptionExceedsLimit,
   authorizationDisplayStatus,
   blankAuthorizationDraft,
   nextAuthorizationCode,
@@ -18,6 +19,13 @@ describe("fuel authorization helpers", () => {
     expect(parseAuthorizationLimits("150", "")).toMatchObject({ limits: { max_liters: 150, max_amount_cents: null } });
     expect(parseAuthorizationLimits("", "1250.50")).toMatchObject({ limits: { max_liters: null, max_amount_cents: 125050 } });
     expect(parseAuthorizationLimits("25", "300.25")).toMatchObject({ limits: { max_liters: 25, max_amount_cents: 30025 } });
+  });
+
+  it("tracks actual consumption against only the limits that were configured", () => {
+    expect(authorizationConsumptionExceedsLimit(50, 200000, null, null)).toBe(false);
+    expect(authorizationConsumptionExceedsLimit(151, 100, 150, null)).toBe(true);
+    expect(authorizationConsumptionExceedsLimit(20, 125100, null, 125000)).toBe(true);
+    expect(authorizationConsumptionExceedsLimit(100, 125000, 100, 125000)).toBe(false);
   });
 
   it("validates future ending time and ordered validity window", () => {

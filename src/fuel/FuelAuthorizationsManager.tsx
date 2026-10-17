@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
-  authorizationDisplayStatus, blankAuthorizationDraft, nextAuthorizationCode,
+  authorizationConsumptionExceedsLimit, authorizationDisplayStatus, blankAuthorizationDraft, nextAuthorizationCode,
   validateAuthorizationDraft, type AuthorizationDraft
 } from "./fuelAuthorizationUtils";
 import { downloadFuelAuthorizationPdf, type FuelAuthorizationPdfData } from "./fuelAuthorizationPdf";
@@ -47,6 +47,8 @@ const formatMoney = (cents: number | string | null) => cents === null || cents =
 const formatLiters = (value: number | string | null) => value === null || value === ""
   ? "Sem limite"
   : new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(Number(value)) + " L";
+const formatConsumedLiters = (value: number | string | null) =>
+  new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(Number(value ?? 0)) + " L";
 const formatDateTime = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
@@ -335,7 +337,7 @@ export function FuelAuthorizationsManager({
     </div>
 
     <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e3a8a", borderRadius: 10, padding: "11px 13px", fontSize: 12, lineHeight: 1.55 }}>
-      <strong>Regra de controle:</strong> cada autorização tem número sequencial único por organização, período de validade, ativo e limites de litros e/ou valor. Para corrigir uma autorização já emitida, cancele-a e emita uma nova; o PDF anterior continuará disponível no histórico com a situação atualizada.
+      <strong>Regra de controle:</strong> cada autorização tem número sequencial único por organização, período de validade e ativo. Os limites de litros e/ou valor são opcionais. O consumo real é atualizado pelos abastecimentos vinculados; registros cancelados não entram nos totais. Para corrigir uma autorização já emitida, cancele-a e emita uma nova; o histórico é preservado.
     </div>
 
     {error && <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 9, padding: 12, color: "#991b1b", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 9, fontSize: 13 }}><AlertCircle size={17}/><span>{error}</span></div>}
@@ -375,19 +377,28 @@ export function FuelAuthorizationsManager({
         </div>
       </div>
       <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", minWidth: 1000, borderCollapse: "collapse", textAlign: "left", fontSize: 12 }}>
-          <thead><tr style={{ background: "#f8fafc", color: "#64748b" }}>{["Autorização", "Ativo", "Motorista / posto", "Limites", "Validade", "Situação", "Documento"].map(title => <th key={title} style={{ padding: "11px 12px", whiteSpace: "nowrap", textTransform: "uppercase", fontSize: 10, letterSpacing: ".04em", borderBottom: "1px solid #e2e8f0" }}>{title}</th>)}</tr></thead>
+        <table style={{ width: "100%", minWidth: 1180, borderCollapse: "collapse", textAlign: "left", fontSize: 12 }}>
+          <thead><tr style={{ background: "#f8fafc", color: "#64748b" }}>{["Autorização", "Ativo", "Motorista / posto", "Limites", "Consumo registrado", "Validade", "Situação", "Documento"].map(title => <th key={title} style={{ padding: "11px 12px", whiteSpace: "nowrap", textTransform: "uppercase", fontSize: 10, letterSpacing: ".04em", borderBottom: "1px solid #e2e8f0" }}>{title}</th>)}</tr></thead>
           <tbody>
             {visible.map(row => {
               const vehicle = vehicleMap.get(row.vehicle_id);
               const driver = row.driver_id ? driverMap.get(row.driver_id) : undefined;
               const supplier = row.supplier_id ? supplierMap.get(row.supplier_id) : undefined;
               const state = authorizationDisplayStatus(row.status, row.valid_from, row.valid_until);
+              const exceedsLimit = authorizationConsumptionExceedsLimit(
+                row.consumed_liters, row.consumed_amount_cents, row.max_liters, row.max_amount_cents
+              );
+              const hasConfiguredLimit = row.max_liters !== null || row.max_amount_cents !== null;
               return <tr key={row.id} style={{ borderBottom: "1px solid #eef2f7" }}>
                 <td style={{ padding: "12px", whiteSpace: "nowrap" }}><strong style={{ color: "#172033", fontSize: 13 }}>{row.authorization_code}</strong><small style={{ display: "block", color: "#94a3b8", marginTop: 3 }}>Emitida {formatDateTime(row.created_at)}</small></td>
                 <td style={{ padding: "12px", minWidth: 145 }}><strong style={{ display: "block", color: "#172033" }}>{vehicle?.description ?? "Ativo não encontrado"}</strong><small style={{ display: "block", color: "#94a3b8" }}>{vehicle?.code ?? ""}{vehicle?.plate ? " · " + vehicle.plate : ""}</small></td>
                 <td style={{ padding: "12px", minWidth: 150 }}><span style={{ display: "block", color: "#334155" }}>{driver?.name ?? "Qualquer motorista"}</span><small style={{ display: "block", color: "#94a3b8" }}>{supplier?.name ?? "Qualquer posto / fornecedor"}</small></td>
                 <td style={{ padding: "12px", whiteSpace: "nowrap" }}><strong style={{ display: "block", color: "#172033" }}>{formatLiters(row.max_liters)}</strong><small style={{ color: "#64748b" }}>{formatMoney(row.max_amount_cents)}</small></td>
+                <td style={{ padding: "12px", whiteSpace: "nowrap", minWidth: 175 }}>
+                  <strong style={{ display: "block", color: exceedsLimit ? "#b91c1c" : "#172033" }}>{formatConsumedLiters(row.consumed_liters)} registrados</strong>
+                  <small style={{ display: "block", color: "#64748b", marginTop: 3 }}>{formatMoney(row.consumed_amount_cents)} total lançado</small>
+                  {hasConfiguredLimit && <small style={{ display: "block", color: exceedsLimit ? "#b91c1c" : "#047857", marginTop: 3 }}>{exceedsLimit ? "Limite autorizado excedido" : "Dentro dos limites definidos"}</small>}
+                </td>
                 <td style={{ padding: "12px", whiteSpace: "nowrap" }}><span>{formatDateTime(row.valid_from)}</span><small style={{ display: "block", color: "#94a3b8", marginTop: 3 }}>até {formatDateTime(row.valid_until)}</small></td>
                 <td style={{ padding: "12px" }}><span style={statusPill(state.key)}>{state.label}</span></td>
                 <td style={{ padding: "12px", whiteSpace: "nowrap" }}><div style={{ display: "flex", gap: 6 }}>
@@ -396,7 +407,7 @@ export function FuelAuthorizationsManager({
                 </div></td>
               </tr>;
             })}
-            {!loading && visible.length === 0 && <tr><td colSpan={7} style={{ padding: 36, textAlign: "center", color: "#64748b" }}><ClipboardList size={24} style={{ display: "block", margin: "0 auto 8px", color: "#94a3b8" }}/><strong style={{ display: "block", color: "#334155" }}>Nenhuma autorização encontrada</strong><small>Ajuste os filtros ou emita uma nova autorização para gerar o PDF.</small></td></tr>}
+            {!loading && visible.length === 0 && <tr><td colSpan={8} style={{ padding: 36, textAlign: "center", color: "#64748b" }}><ClipboardList size={24} style={{ display: "block", margin: "0 auto 8px", color: "#94a3b8" }}/><strong style={{ display: "block", color: "#334155" }}>Nenhuma autorização encontrada</strong><small>Ajuste os filtros ou emita uma nova autorização para gerar o PDF.</small></td></tr>}
           </tbody>
         </table>
       </div>
