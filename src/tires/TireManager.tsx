@@ -35,7 +35,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tab, setTab] = useState<"inventory" | "history" | "positions">("inventory");
+  const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life">("inventory");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showTireForm, setShowTireForm] = useState(false);
@@ -89,34 +89,68 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     }
     return map;
   }, [tires,latestPlacement]);
-  const durationKm = useMemo(() => {
-    const totals = new Map<string,number>();
+  const lifeReport = useMemo(() => {
+    const rows = new Map<string,{km:number;cycles:number;completedDays:number;activeDays:number;lastMountAt:string|null;lastEndAt:string|null}>();
     const byTire = new Map<string,TireEvent[]>();
-    for (const event of [...events].sort((a,b) => new Date(a.occurred_at).getTime()-new Date(b.occurred_at).getTime())) {
+    const ordered = [...events].sort((a,b) => new Date(a.occurred_at).getTime()-new Date(b.occurred_at).getTime());
+    for (const event of ordered) {
       if (!byTire.has(event.tire_id)) byTire.set(event.tire_id,[]);
       byTire.get(event.tire_id)!.push(event);
     }
-    for (const [tireId,list] of byTire) {
-      let startMeter: number | null = null;
-      let startVehicle: string | null = null;
-      let total = 0;
-      for (const e of list) {
-        if (placementEvent(e.event_type)) {
-          startMeter = e.meter_value == null ? null : Number(e.meter_value);
-          startVehicle = e.vehicle_id;
-        } else if (e.event_type === "dismount") {
-          if (startMeter !== null && startVehicle && startVehicle === e.vehicle_id && e.meter_value != null && Number(e.meter_value) >= startMeter) total += Number(e.meter_value) - startMeter;
-          startMeter = null;
-          startVehicle = null;
-        } else if (["retread_sent","repair","scrap"].includes(e.event_type)) {
-          startMeter = null;
-          startVehicle = null;
+    const now = Date.now();
+    for (const tire of tires) {
+      let cycleStart: string | null = null;
+      let segmentVehicle: string | null = null;
+      let segmentMeter: number | null = null;
+      let km = 0;
+      let cycles = 0;
+      let completedDays = 0;
+      let lastMountAt: string | null = null;
+      let lastEndAt: string | null = null;
+      for (const event of byTire.get(tire.id) ?? []) {
+        if (event.event_type === "mount") {
+          cycleStart = event.occurred_at;
+          lastMountAt = event.occurred_at;
+          segmentVehicle = event.vehicle_id;
+          segmentMeter = event.meter_value == null ? null : Number(event.meter_value);
+        } else if (event.event_type === "rotation" || event.event_type === "transfer") {
+          if (cycleStart && segmentVehicle && segmentVehicle === event.vehicle_id && segmentMeter !== null && event.meter_value !== null && Number(event.meter_value) >= segmentMeter) {
+            km += Number(event.meter_value) - segmentMeter;
+          }
+          if (cycleStart) {
+            segmentVehicle = event.vehicle_id;
+            segmentMeter = event.meter_value == null ? null : Number(event.meter_value);
+          }
+        } else if (["dismount","retread_sent","repair","scrap"].includes(event.event_type)) {
+          if (cycleStart) {
+            if (segmentVehicle && segmentVehicle === event.vehicle_id && segmentMeter !== null && event.meter_value !== null && Number(event.meter_value) >= segmentMeter) {
+              km += Number(event.meter_value) - segmentMeter;
+            }
+            cycles += 1;
+            completedDays += Math.max(0,Math.floor((new Date(event.occurred_at).getTime()-new Date(cycleStart).getTime())/86400000));
+            lastEndAt = event.occurred_at;
+            cycleStart = null;
+            segmentVehicle = null;
+            segmentMeter = null;
+          }
+        } else if (event.event_type === "adjustment" && event.reason?.startsWith("Ajuste para Em estoque")) {
+          if (cycleStart) {
+            if (segmentVehicle && segmentVehicle === event.vehicle_id && segmentMeter !== null && event.meter_value !== null && Number(event.meter_value) >= segmentMeter) km += Number(event.meter_value)-segmentMeter;
+            cycles += 1;
+            completedDays += Math.max(0,Math.floor((new Date(event.occurred_at).getTime()-new Date(cycleStart).getTime())/86400000));
+            lastEndAt = event.occurred_at;
+            cycleStart = null;
+            segmentVehicle = null;
+            segmentMeter = null;
+          }
         }
       }
-      totals.set(tireId,total);
+      const activeDays = tire.status === "mounted" && cycleStart ? Math.max(0,Math.floor((now-new Date(cycleStart).getTime())/86400000)) : 0;
+      rows.set(tire.id,{km,cycles,completedDays,activeDays,lastMountAt,lastEndAt});
     }
-    return totals;
-  }, [events]);
+    return rows;
+  }, [events,tires]);
+  const durationKm = useMemo(() => new Map([...lifeReport].map(([id,row]) => [id,row.km])), [lifeReport]);
   const filteredTires = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return tires.filter(t => {
@@ -212,18 +246,18 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (!isMounted) { setError("Somente um pneu montado pode ser desmontado."); return; }
       nextStatus = "in_stock"; vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
     } else if (kind === "retread_sent") {
-      if (["retread","repair","scrapped","sold"].includes(oldStatus)) { setError("Este pneu não pode ser enviado para recapagem no status atual."); return; }
-      nextStatus = "retread"; vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
+      if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes de enviá-lo para recapagem."); return; }
+      nextStatus = "retread";
     } else if (kind === "retread_returned") {
       if (oldStatus !== "retread") { setError("O retorno só pode ser lançado para pneu em recapagem."); return; }
       nextStatus = "in_stock";
     } else if (kind === "repair") {
-      if (["scrapped","sold"].includes(oldStatus)) { setError("Pneu descartado ou vendido não pode receber reparo."); return; }
-      nextStatus = "repair"; vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
+      if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes de registrar o envio para reparo."); return; }
+      nextStatus = "repair";
     } else if (kind === "scrap") {
-      if (["scrapped","sold"].includes(oldStatus)) { setError("Este pneu já foi descartado ou vendido."); return; }
+      if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes do descarte."); return; }
       if (!window.confirm("Confirmar o descarte permanente deste pneu? O histórico será preservado.")) return;
-      nextStatus = "scrapped"; vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
+      nextStatus = "scrapped";
     } else if (kind === "inspection") {
       vehicleId = vehiclePlacement?.vehicle_id ?? (eventForm.vehicle_id || null); positionId = vehiclePlacement?.position_id ?? (eventForm.position_id || null);
     } else if (kind === "adjustment") {
@@ -309,10 +343,11 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       <button className={tab === "inventory" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("inventory")}><CircleDot size={16}/> Inventário</button>
       <button className={tab === "history" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("history")}><History size={16}/> Histórico de eventos</button>
       <button className={tab === "positions" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("positions")}><Settings2 size={16}/> Posições por veículo</button>
+      <button className={tab === "life" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("life")}><History size={16}/> Vida útil / duração</button>
     </div>
     <div className="tire-list-toolbar">
-      <label className="tire-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "history" ? "Buscar pneu, veículo ou evento..." : "Buscar série, medida ou veículo..."}/></label>
-      {tab === "inventory" && <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filtrar por status"><option value="all">Todos os status</option>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>}
+      <label className="tire-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "history" ? "Buscar pneu, veículo ou evento..." : tab === "life" ? "Buscar no relatório de vida útil..." : "Buscar série, medida ou veículo..."}/></label>
+      {(tab === "inventory" || tab === "life") && <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filtrar por status"><option value="all">Todos os status</option>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>}
       {tab === "positions" && <button className="primary-button" onClick={() => {setPositionForm({vehicle_id:vehicles[0]?.id ?? "",position_code:"",position_label:""});setShowPositionForm(true);setError("");}}><Plus size={16}/> Nova posição</button>}
     </div>
     {loading ? <div className="tire-empty"><RefreshCw size={22}/><strong>Carregando dados...</strong></div> : <>
@@ -335,6 +370,15 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         {visiblePositions.map(p => {const v = vehicleMap.get(p.vehicle_id);const occupantId = mountedTiresAtPosition.get(p.id);const occupant = occupantId ? tireMap.get(occupantId) : null;return <tr key={p.id}><td>{v?.description ?? "Ativo não encontrado"}<small className="tire-table-sub">{v?.plate ?? v?.code ?? ""}</small></td><td>{p.position_code}</td><td>{p.position_label}</td><td><span className={"tire-status " + (p.is_active ? "tire-status-in_stock" : "tire-status-scrapped")}>{p.is_active ? "Ativa" : "Inativa"}</span></td><td>{occupant ? <strong>{occupant.serial_number}</strong> : "Vazia"}</td><td><button className="secondary-button" onClick={() => void togglePosition(p)} disabled={saving}>{p.is_active ? "Desativar" : "Reativar"}</button></td></tr>;})}
         {!visiblePositions.length && <tr><td colSpan={6}><div className="tire-empty"><Settings2 size={22}/><strong>Nenhuma posição cadastrada</strong><span>Cadastre as posições para habilitar montagens rastreáveis.</span></div></td></tr>}
       </tbody></table></div>}
+
+      {tab === "life" && <div className="tire-life-report">
+        <div className="tire-life-heading"><div><h3>Relatório de vida útil dos pneus</h3><p>Indicadores calculados a partir dos eventos efetivamente lançados; lacunas de histórico podem reduzir os resultados.</p></div></div>
+        <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Pneu / medida</th><th>Status</th><th>Ciclos encerrados</th><th>Km registrados</th><th>Média km/ciclo</th><th>Dias em ciclos concluídos</th><th>Montagem atual</th><th>Último encerramento</th></tr></thead><tbody>
+          {filteredTires.map(t => {const r=lifeReport.get(t.id);const place=latestPlacement.get(t.id);const v=place?.vehicle_id?vehicleMap.get(place.vehicle_id):null;return <tr key={t.id}><td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{t.size}</small></div></td><td><span className={"tire-status tire-status-"+t.status}>{statusLabels[t.status] ?? t.status}</span></td><td>{(r?.cycles ?? 0).toLocaleString("pt-BR")}</td><td>{(r?.km ?? 0).toLocaleString("pt-BR")} km</td><td>{(r?.cycles ?? 0)>0?Math.round((r?.km ?? 0)/(r?.cycles ?? 1)).toLocaleString("pt-BR")+" km":"—"}</td><td>{(r?.completedDays ?? 0).toLocaleString("pt-BR")} dias</td><td>{t.status==="mounted"?(r?.activeDays ?? 0).toLocaleString("pt-BR")+" dias": "—"}<small className="tire-table-sub">{t.status==="mounted"?(v?.description ?? "Montado"): ""}</small></td><td>{dateLabel(r?.lastEndAt ?? null)}</td></tr>;})}
+          {!filteredTires.length && <tr><td colSpan={8}><div className="tire-empty"><History size={22}/><strong>Nenhum pneu encontrado</strong><span>Ajuste a pesquisa ou cadastre pneus e eventos.</span></div></td></tr>}
+        </tbody></table></div>
+        <p className="tire-footnote">A quilometragem soma apenas trechos em que as leituras inicial e final são válidas e pertencem ao mesmo veículo. Dias em ciclos concluídos contam do primeiro registro de montagem até desmontagem/saída de operação; duração atual é mostrada separadamente para pneus montados. Não se estima dado ausente.</p>
+      </div>
     </>}
     <p className="tire-footnote">A duração em km é estimada apenas nos ciclos com montagem e desmontagem registrados no mesmo veículo e com leituras válidas. Não representa quilometragem de vida útil completa quando faltarem eventos históricos.</p>
 
@@ -344,8 +388,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         <label>Medida do pneu<input required minLength={2} maxLength={60} placeholder="Ex.: 295/80 R22.5" value={tireForm.size} onChange={e=>setTireForm(f=>({...f,size:e.target.value}))}/></label>
         <label>Marca<input maxLength={80} value={tireForm.brand} onChange={e=>setTireForm(f=>({...f,brand:e.target.value}))}/></label>
         <label>Modelo / linha<input maxLength={80} value={tireForm.model} onChange={e=>setTireForm(f=>({...f,model:e.target.value}))}/></label>
-        <label>Data de aquisição<input type="date" value={tireForm.purchase_date} onChange={e=>setTireForm(f=>({...f,purchase_date:e.target.value}))}/></label>
-        <label>Custo de aquisição (R$)<input type="number" min="0" step="0.01" value={tireForm.purchase_cost} onChange={e=>setTireForm(f=>({...f,purchase_cost:e.target.value}))}/></label>
+        <label>Data de aquisição<input type="date" value={tireForm.purchase_date} disabled={Boolean(editingTireId)} onChange={e=>setTireForm(f=>({...f,purchase_date:e.target.value}))}/></label>
+        <label>Custo de aquisição (R$)<input type="number" min="0" step="0.01" value={tireForm.purchase_cost} disabled={Boolean(editingTireId)} onChange={e=>setTireForm(f=>({...f,purchase_cost:e.target.value}))}/></label>
       </div><div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => setShowTireForm(false)}>Cancelar</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : editingTireId ? "Salvar alterações" : "Cadastrar pneu"}</button></div></form>
     </section></div>}
 
