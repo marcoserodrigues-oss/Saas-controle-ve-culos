@@ -286,7 +286,6 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const inStock = tires.filter(t => t.status === "in_stock").length;
   const inProcess = tires.filter(t => t.status === "retread" || t.status === "repair").length;
   const purchaseValue = tires.reduce((sum,t) => sum + Number(t.purchase_cost_cents || 0),0);
-  const eventVehicle = eventForm.vehicle_id ? vehicleMap.get(eventForm.vehicle_id) : null;
   const currentTire = eventForm.tire_id ? tireMap.get(eventForm.tire_id) : null;
   const currentLocation = currentTire ? latestPlacement.get(currentTire.id) : undefined;
   const needsVehiclePosition = ["mount","rotation","transfer"].includes(eventForm.event_type) || (eventForm.event_type === "adjustment" && eventForm.target_status === "mounted");
