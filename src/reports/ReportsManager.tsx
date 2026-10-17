@@ -15,9 +15,6 @@ const emptyData = (): FleetAnalyticsData => ({
   standaloneExpenses: [], maintenancePlans: [], drivers: []
 });
 const openOrderStatuses = new Set(["open", "in_progress", "waiting_parts"]);
-const orderStatusLabel: Record<string, string> = {
-  open: "Aberta", in_progress: "Em andamento", waiting_parts: "Aguardando peças", closed: "Concluída"
-};
 
 function isInRange(value: string, startIso: string, endExclusiveIso: string) {
   const time = new Date(value).getTime();
@@ -70,7 +67,7 @@ export function ReportsManager({ organizationId }: Props) {
   useEffect(() => { void load(); }, [load]);
 
   const rangeWorkOrders = useMemo(
-    () => data.workOrders.filter(order => isInRange(order.opened_at, startIso, endExclusiveIso)),
+    () => data.workOrders.filter(order => isInRange(order.status === "closed" ? order.closed_at ?? order.opened_at : order.opened_at, startIso, endExclusiveIso)),
     [data.workOrders, startIso, endExclusiveIso]
   );
   const rangeData = useMemo(() => ({ ...data, workOrders: rangeWorkOrders }), [data, rangeWorkOrders]);
@@ -98,7 +95,7 @@ export function ReportsManager({ organizationId }: Props) {
     }
     for (const row of rangeWorkOrders) {
       if (row.status !== "closed") continue;
-      const bucket = ensure(row.opened_at);
+      const bucket = ensure(row.closed_at ?? row.opened_at);
       if (bucket) bucket.maintenanceCents += asNumber(row.labor_cost_cents) + asNumber(row.parts_cost_cents);
     }
     for (const row of data.tireEvents) {
@@ -158,7 +155,7 @@ export function ReportsManager({ organizationId }: Props) {
       <div><h2>Relatórios gerenciais</h2><p>Consolidação de combustível, ordens concluídas, pneus e despesas avulsas não vinculadas.</p></div>
       <div className="fleet-toolbar-actions">
         <button type="button" className="secondary-button" onClick={() => setRefreshKey(v => v + 1)} disabled={loading}><RefreshCw size={15}/> Atualizar dados</button>
-        <button type="button" className="primary-button" onClick={downloadCsv} disabled={loading || vehicleRows.length === 0}><Download size={15}/> Exportar CSV</button>
+        <button type="button" className="primary-button" onClick={downloadCsv} disabled={loading}><Download size={15}/> Exportar CSV</button>
       </div>
     </div>
 
