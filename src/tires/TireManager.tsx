@@ -31,11 +31,13 @@ const placementEvent = (type: EventType) => ["mount","rotation","transfer"].incl
 async function syncTemplatePositions(organizationId: string, vehicleId: string, template: LayoutTemplate) {
   if (!supabase) throw new Error("Banco de dados não configurado.");
   const { data, error } = await supabase.from("vehicle_tire_positions")
-    .select("position_code")
+    .select("id,position_code,is_active")
     .eq("organization_id", organizationId)
     .eq("vehicle_id", vehicleId);
   if (error) throw error;
-  const existing = new Set(((data ?? []) as {position_code:string}[]).map(row => row.position_code.toLocaleLowerCase("pt-BR")));
+  const rows = (data ?? []) as {id:string;position_code:string;is_active:boolean}[];
+  const templateCodes = new Set(template.layout.map(pos => pos.code.toLocaleLowerCase("pt-BR")));
+  const existing = new Set(rows.map(row => row.position_code.toLocaleLowerCase("pt-BR")));
   const missing = template.layout.filter(pos => !existing.has(pos.code.toLocaleLowerCase("pt-BR"))).map(pos => ({
     organization_id: organizationId,
     vehicle_id: vehicleId,
@@ -43,6 +45,7 @@ async function syncTemplatePositions(organizationId: string, vehicleId: string, 
     position_label: pos.label,
     is_active: true
   }));
+  const reactivate = rows.filter(row => !row.is_active && templateCodes.has(row.position_code.toLocaleLowerCase("pt-BR"))).map(row => row.position_code);
   if (missing.length) {
     const result = await supabase.from("vehicle_tire_positions").upsert(missing, {
       onConflict: "vehicle_id,position_code",
@@ -50,7 +53,16 @@ async function syncTemplatePositions(organizationId: string, vehicleId: string, 
     });
     if (result.error) throw result.error;
   }
-  return missing.length;
+  if (reactivate.length) {
+    const result = await supabase.from("vehicle_tire_positions")
+      .update({is_active:true})
+      .eq("organization_id",organizationId)
+      .eq("vehicle_id",vehicleId)
+      .in("position_code",reactivate)
+      .select("id");
+    if (result.error) throw result.error;
+  }
+  return missing.length + reactivate.length;
 }
 
 async function generateTireCode(organizationId: string) {
