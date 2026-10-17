@@ -83,12 +83,12 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   const authorizationMap = useMemo(()=>new Map(authorizations.map(a=>[a.id,a])),[authorizations]);
   const selectedAuthorization = form.authorization_id ? authorizationMap.get(form.authorization_id) : undefined;
   const openAuthorizations = useMemo(
-    () => authorizations.filter(a => isAuthorizationPendingSettlement(a.status, a.consumed_liters)),
+    () => authorizations.filter(a => isAuthorizationPendingSettlement(a.status, a.consumed_liters, a.valid_from)),
     [authorizations]
   );
   const authorizationOptions = useMemo(
     () => authorizations.filter(a =>
-      isAuthorizationPendingSettlement(a.status, a.consumed_liters) ||
+      isAuthorizationPendingSettlement(a.status, a.consumed_liters, a.valid_from) ||
       (Boolean(editing) && a.id === form.authorization_id)
     ),
     [authorizations, editing, form.authorization_id]
@@ -162,7 +162,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
       if(authorization.supplier_id&&authorization.supplier_id!==form.supplier_id){setError("O posto/fornecedor não corresponde ao autorizado.");return;}
       const existingEvent = editing ? rows.find(r=>r.id===editing) : undefined;
       const isReusingSameAuthorization = existingEvent?.authorization_id === authorization.id;
-      if(entryMode==="settlement"&&!isReusingSameAuthorization&&!isAuthorizationPendingSettlement(authorization.status,authorization.consumed_liters)){
+      if(entryMode==="settlement"&&!isReusingSameAuthorization&&!isAuthorizationPendingSettlement(authorization.status,authorization.consumed_liters,authorization.valid_from)){
         setError("Esta autorização já recebeu baixa ou não está ativa. Atualize a lista e selecione outra autorização em aberto.");
         return;
       }
