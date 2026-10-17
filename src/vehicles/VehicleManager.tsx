@@ -1,4 +1,5 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Plus, RefreshCw, Search, Truck, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
