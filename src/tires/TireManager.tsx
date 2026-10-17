@@ -7,7 +7,9 @@ import { nextSequentialCode } from "../lib/automaticCode";
 type TireStatus = "in_stock" | "mounted" | "retread" | "repair" | "scrapped" | "sold";
 type EventType = "purchase" | "mount" | "dismount" | "rotation" | "transfer" | "retread_sent" | "retread_returned" | "repair" | "inspection" | "scrap" | "adjustment";
 type Tire = { id: string; serial_number: string; brand: string | null; model: string | null; size: string; purchase_date: string | null; purchase_cost_cents: number; status: TireStatus; created_at: string };
-type Vehicle = { id: string; code: string; plate: string | null; description: string; kind: string; meter_kind: string; status: string };
+type Vehicle = { id: string; code: string; plate: string | null; description: string; kind: string; meter_kind: string; status: string; tire_layout_template_id: string | null };
+type LayoutPosition = { code: string; label: string; axle: number; side: string; slot: string; x: number; y: number };
+type LayoutTemplate = { id: string; organization_id: string | null; code: string; name: string; asset_kind: string; diagram_type: string; axle_count: number; tire_count: number; description: string | null; layout: LayoutPosition[]; is_system: boolean; is_active: boolean };
 type Position = { id: string; vehicle_id: string; position_code: string; position_label: string; is_active: boolean };
 type Supplier = { id: string; name: string; supplier_type: string; status: string };
 type TireEvent = { id: string; tire_id: string; vehicle_id: string | null; position_id: string | null; event_type: EventType; occurred_at: string; meter_value: number | null; cost_cents: number; supplier_id: string | null; related_tire_event_id: string | null; notes: string | null; reason: string | null };
@@ -25,6 +27,31 @@ const dateLabel = (value: string | null) => value ? new Intl.DateTimeFormat("pt-
 const datetimeLabel = (value: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 const toCents = (value: string) => Math.round((Number(value.replace(",", ".")) || 0) * 100);
 const placementEvent = (type: EventType) => ["mount","rotation","transfer"].includes(type);
+
+async function syncTemplatePositions(organizationId: string, vehicleId: string, template: LayoutTemplate) {
+  if (!supabase) throw new Error("Banco de dados não configurado.");
+  const { data, error } = await supabase.from("vehicle_tire_positions")
+    .select("position_code")
+    .eq("organization_id", organizationId)
+    .eq("vehicle_id", vehicleId);
+  if (error) throw error;
+  const existing = new Set(((data ?? []) as {position_code:string}[]).map(row => row.position_code.toLocaleLowerCase("pt-BR")));
+  const missing = template.layout.filter(pos => !existing.has(pos.code.toLocaleLowerCase("pt-BR"))).map(pos => ({
+    organization_id: organizationId,
+    vehicle_id: vehicleId,
+    position_code: pos.code,
+    position_label: pos.label,
+    is_active: true
+  }));
+  if (missing.length) {
+    const result = await supabase.from("vehicle_tire_positions").upsert(missing, {
+      onConflict: "vehicle_id,position_code",
+      ignoreDuplicates: true
+    });
+    if (result.error) throw result.error;
+  }
+  return missing.length;
+}
 
 async function generateTireCode(organizationId: string) {
   if (!supabase) throw new Error("Banco de dados não configurado.");
@@ -65,6 +92,10 @@ async function generatePositionCode(organizationId: string, vehicleId: string) {
 export function TireManager({ organizationId }: { organizationId: string }) {
   const [tires, setTires] = useState<Tire[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [layoutTemplates, setLayoutTemplates] = useState<LayoutTemplate[]>([]);
+  const [layoutVehicleId, setLayoutVehicleId] = useState("");
+  const [selectedLayoutTemplateId, setSelectedLayoutTemplateId] = useState("");
+  const [layoutMoveTarget, setLayoutMoveTarget] = useState<string | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [events, setEvents] = useState<TireEvent[]>([]);
@@ -72,7 +103,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life">("inventory");
+  const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life" | "layout">("inventory");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showTireForm, setShowTireForm] = useState(false);
@@ -86,26 +117,33 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const load = useCallback(async () => {
     if (!supabase) { setError("Banco de dados não configurado."); setLoading(false); return; }
     setLoading(true);
-    const [t,v,p,s,e] = await Promise.all([
+    const [t,v,p,s,e,l] = await Promise.all([
       supabase.from("tires").select("id,serial_number,brand,model,size,purchase_date,purchase_cost_cents,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
-      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,status").eq("organization_id",organizationId).eq("status","active").order("description"),
+      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,status,tire_layout_template_id").eq("organization_id",organizationId).eq("status","active").order("description"),
       supabase.from("vehicle_tire_positions").select("id,vehicle_id,position_code,position_label,is_active").eq("organization_id",organizationId).order("position_code"),
       supabase.from("suppliers").select("id,name,supplier_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
-      supabase.from("tire_events").select("id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,cost_cents,supplier_id,related_tire_event_id,notes,reason").eq("organization_id",organizationId).order("occurred_at",{ascending:false}).limit(2000)
+      supabase.from("tire_events").select("id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,cost_cents,supplier_id,related_tire_event_id,notes,reason").eq("organization_id",organizationId).order("occurred_at",{ascending:false}).limit(2000),
+      supabase.from("tire_layout_templates").select("id,organization_id,code,name,asset_kind,diagram_type,axle_count,tire_count,description,layout,is_system,is_active").eq("is_active",true).or("organization_id.is.null,organization_id.eq."+organizationId).order("name")
     ]);
-    const fail = t.error || v.error || p.error || s.error || e.error;
-    if (fail) setError("Não foi possível carregar pneus e histórico. Confira a conexão e as permissões da organização.");
+    const fail = t.error || v.error || p.error || s.error || e.error || l.error;
+    if (fail) setError("Não foi possível carregar pneus, esquemas ou histórico. Confira a migração, conexão e permissões da organização.");
     else {
       setTires((t.data ?? []) as Tire[]);
       setVehicles((v.data ?? []) as Vehicle[]);
       setPositions((p.data ?? []) as Position[]);
       setSuppliers((s.data ?? []) as Supplier[]);
       setEvents((e.data ?? []) as TireEvent[]);
+      setLayoutTemplates((l.data ?? []) as unknown as LayoutTemplate[]);
       setError("");
     }
     setLoading(false);
   }, [organizationId]);
   useEffect(() => { void load(); }, [load]);
+  const layoutVehicle = vehicles.find(v => v.id === layoutVehicleId) ?? vehicles[0] ?? null;
+  useEffect(() => {
+    setSelectedLayoutTemplateId(layoutVehicle?.tire_layout_template_id ?? "");
+  }, [layoutVehicle?.id, layoutVehicle?.tire_layout_template_id]);
+  const selectedLayoutTemplate = layoutTemplates.find(t => t.id === selectedLayoutTemplateId) ?? null;
 
   const tireMap = useMemo(() => new Map(tires.map(t => [t.id,t])), [tires]);
   const vehicleMap = useMemo(() => new Map(vehicles.map(v => [v.id,v])), [vehicles]);
@@ -286,6 +324,68 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     setEventForm(next); setShowEventForm(true); setError(""); setNotice("");
   }
 
+
+  async function applyLayoutTemplate() {
+    if (!supabase || saving || !layoutVehicle || !selectedLayoutTemplate) return;
+    if (selectedLayoutTemplate.asset_kind !== layoutVehicle.kind) {
+      setError("O esquema selecionado não corresponde ao tipo deste ativo.");
+      return;
+    }
+    setSaving(true); setError(""); setNotice("");
+    const update = await supabase.from("vehicles")
+      .update({tire_layout_template_id:selectedLayoutTemplate.id})
+      .eq("id",layoutVehicle.id)
+      .eq("organization_id",organizationId)
+      .select("id").maybeSingle();
+    if (update.error || !update.data) {
+      setError("Não foi possível vincular o esquema ao veículo/equipamento.");
+      setSaving(false);
+      return;
+    }
+    try {
+      const added = await syncTemplatePositions(organizationId,layoutVehicle.id,selectedLayoutTemplate);
+      setNotice("Esquema " + selectedLayoutTemplate.name + " aplicado. " + added + " posição(ões) criada(s); as posições e o histórico existentes foram preservados.");
+      await load();
+    } catch {
+      setError("O esquema foi associado, mas nem todas as posições foram criadas. Clique em Aplicar esquema novamente para completar.");
+      await load();
+    }
+    setSaving(false);
+  }
+
+  function startDrag(event: React.DragEvent<HTMLElement>, tireId: string) {
+    event.dataTransfer.setData("text/plain",tireId);
+    event.dataTransfer.effectAllowed = "move";
+  }
+
+  function dropTireOnPosition(event: React.DragEvent<HTMLElement>, position: Position | undefined) {
+    event.preventDefault();
+    const tireId = event.dataTransfer.getData("text/plain");
+    const tire = tireMap.get(tireId);
+    if (!tire || !layoutVehicle || !selectedLayoutTemplate || !position || !position.is_active) {
+      setError("Aplique um esquema e confirme que a posição está ativa antes de movimentar o pneu.");
+      return;
+    }
+    if (tire.status !== "in_stock" && tire.status !== "mounted") {
+      setError("Somente pneus em estoque ou montados podem ser arrastados para o desenho.");
+      return;
+    }
+    const placement = latestPlacement.get(tire.id);
+    const nextType: EventType = tire.status === "in_stock" ? "mount" : placement?.vehicle_id === layoutVehicle.id ? "rotation" : "transfer";
+    setEventForm({
+      ...emptyEvent(),
+      tire_id: tire.id,
+      event_type: nextType,
+      vehicle_id: layoutVehicle.id,
+      position_id: position.id,
+      reason: "Movimentação pelo desenho de pneus"
+    });
+    setLayoutMoveTarget(position.id);
+    setShowEventForm(true);
+    setError("");
+    setNotice("");
+  }
+
   async function saveEvent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || saving) return;
@@ -346,10 +446,34 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       const targetPosition = activePositions.find(p => p.id === positionId && p.vehicle_id === vehicleId);
       if (!targetPosition) { setError("A posição selecionada não está ativa ou não pertence ao veículo escolhido."); return; }
       const occupant = mountedTiresAtPosition.get(targetPosition.id);
-      if (occupant && occupant !== tire.id) { setError("Esta posição já está ocupada por outro pneu. Desmonte ou transfira o pneu atual primeiro."); return; }
+      if (occupant && occupant !== tire.id && !layoutMoveTarget) { setError("Esta posição já está ocupada por outro pneu. Use o desenho para trocar posições por arrasto, ou desmonte o pneu atual primeiro."); return; }
     }
 
     setSaving(true); setError(""); setNotice("");
+    if (layoutMoveTarget && placementEvent(kind)) {
+      const movement = await supabase.rpc("move_tire_to_position", {
+        p_tire_id: tire.id,
+        p_target_position_id: layoutMoveTarget,
+        p_meter_value: meter,
+        p_occurred_at: new Date(eventForm.occurred_at).toISOString(),
+        p_reason: eventForm.reason.trim() || null,
+        p_notes: eventForm.notes.trim() || null
+      });
+      if (movement.error || !movement.data) {
+        const serverMessage = movement.error?.message ?? "";
+        setError(serverMessage.toLocaleLowerCase("pt-BR").includes("ocupada")
+          ? "Essa troca exige que o pneu selecionado esteja montado; para ocupar uma posição vazia, arraste um pneu do estoque."
+          : "Não foi possível movimentar o pneu pelo desenho. " + (serverMessage ? serverMessage : "Confira a posição e tente novamente."));
+      } else {
+        const action = (movement.data as {action?:string}).action;
+        setShowEventForm(false);
+        setLayoutMoveTarget(null);
+        setNotice(action === "swap" ? "Rodízio/troca de posições registrado no histórico dos dois pneus." : action === "mount" ? "Pneu montado na posição selecionada." : "Movimentação do pneu registrada.");
+        await load();
+      }
+      setSaving(false);
+      return;
+    }
     const row = {organization_id:organizationId,tire_id:tire.id,vehicle_id:vehicleId,position_id:positionId,event_type:kind,occurred_at:new Date(eventForm.occurred_at).toISOString(),meter_value:meter,cost_cents:cost,supplier_id:eventForm.supplier_id || null,reason:kind === "adjustment" ? "Ajuste para " + statusLabels[nextStatus] + (eventForm.reason.trim() ? " — " + eventForm.reason.trim() : "") : eventForm.reason.trim() || null,notes:eventForm.notes.trim() || null};
     const inserted = await supabase.from("tire_events").insert(row).select("id").maybeSingle();
     if (inserted.error || !inserted.data) {
@@ -495,7 +619,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div><div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => setShowTireForm(false)}>Cancelar</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : editingTireId ? "Salvar alterações" : "Cadastrar pneu"}</button></div></form>
     </section></div>}
 
-    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={() => setShowEventForm(false)} aria-label="Fechar"><X size={18}/></button></div>
+    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);}} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveEvent}><div className="vehicle-fields tire-event-fields">
         <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? "",position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
         <label>Tipo de evento<select required value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
@@ -511,7 +635,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div>
       {currentTire && <div className="tire-modal-hint">Status atual: <strong>{statusLabels[currentTire.status]}</strong>{currentLocation?.vehicle_id ? " · Local atual: " + (vehicleMap.get(currentLocation.vehicle_id)?.description ?? "veículo") + (currentLocation.position_id && positionMap.get(currentLocation.position_id) ? " / " + positionMap.get(currentLocation.position_id)!.position_label : "") : ""}</div>}
       {eventForm.event_type === "dismount" && <div className="tire-modal-hint">A desmontagem será registrada na última posição conhecida, preservando o histórico.</div>}
-      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => setShowEventForm(false)}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : "Registrar no histórico"}</button></div></form>
+      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);}}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : "Registrar no histórico"}</button></div></form>
     </section></div>}
 
     {showPositionForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-position-title"><div className="vehicle-form-heading"><div><h3 id="tire-position-title">Nova posição de pneu</h3><p>Cadastre posições conforme os eixos e o layout real do veículo.</p></div><button className="icon-button" onClick={() => setShowPositionForm(false)} aria-label="Fechar"><X size={18}/></button></div>
