@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 type Membership = { organization_id: string; role: string; organizations: { name: string } | { name: string }[] | null };
 
-export function AuthGate({ children }: { children: (context: { organizationId: string | null; organizationName: string | null; userEmail: string | null; signOut: () => Promise<void> }) => React.ReactNode }) {
+export function AuthGate({ children }: { children: (context: { organizationId: string | null; organizationName: string | null; userEmail: string | null; signOut: () => Promise<void> }) => ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [checking, setChecking] = useState(true);
   const [email, setEmail] = useState("");
