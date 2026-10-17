@@ -88,7 +88,7 @@ export function Dashboard({ organizationId, onNavigate }: Props) {
   useEffect(() => { void load(); }, [load]);
 
   const rangeWorkOrders = useMemo(
-    () => data.workOrders.filter(o => isInRange(o.opened_at, startIso, endExclusiveIso)),
+    () => data.workOrders.filter(o => isInRange(o.status === "closed" ? o.closed_at ?? o.opened_at : o.opened_at, startIso, endExclusiveIso)),
     [data.workOrders, startIso, endExclusiveIso]
   );
   const rangeData = useMemo(() => ({ ...data, workOrders: rangeWorkOrders }), [data, rangeWorkOrders]);
@@ -124,7 +124,7 @@ export function Dashboard({ organizationId, onNavigate }: Props) {
     for (const order of rangeWorkOrders) {
       const vehicle = vehicleMap.get(order.vehicle_id);
       rows.push({
-        id: "os-" + order.id, at: order.opened_at, kind: "maintenance",
+        id: "os-" + order.id, at: order.status === "closed" ? order.closed_at ?? order.opened_at : order.opened_at, kind: "maintenance",
         title: order.order_number + " · " + order.description,
         detail: (vehicle?.description ?? "Ativo não identificado") + " · " + (orderStatusLabel[order.status] ?? order.status),
         amountCents: workOrderCostCents(order)
@@ -195,7 +195,7 @@ export function Dashboard({ organizationId, onNavigate }: Props) {
 
     <div className="fleet-dashboard-grid">
       <article className="fleet-panel">
-        <div className="fleet-panel-heading"><div><h3>Custos registrados</h3><p>Abastecimento, O.S. concluídas, pneus e despesas avulsas sem vínculo.</p></div><span className="fleet-period-chip">{shortDate(startIso)} — {shortDate(endExclusiveIso.substring(0, 10) + "T00:00:00")}</span></div>
+        <div className="fleet-panel-heading"><div><h3>Custos registrados</h3><p>Abastecimento, O.S. concluídas, pneus e despesas avulsas sem vínculo.</p></div><span className="fleet-period-chip">{shortDate(startIso)} — {shortDate(today + "T12:00:00")}</span></div>
         {(["fuelCents", "maintenanceCents", "tireCents", "otherCents"] as const).map((key, i) => {
           const labels = ["Combustível", "Manutenção concluída", "Pneus", "Despesas avulsas"];
           const values = [costs.fuelCents, costs.maintenanceCents, costs.tireCents, costs.otherCents];
