@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
-import { AlertCircle, CheckCircle2, Fuel, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileText, Fuel, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
+import { FuelAuthorizationsManager } from "./FuelAuthorizationsManager";
 import { supabase } from "../lib/supabase";
 
 type Vehicle = { id: string; code: string; plate: string | null; description: string; meter_kind: string; fuel_type: string; status: string };
@@ -28,6 +29,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   const [days,setDays] = useState("30");
   const [error,setError] = useState("");
   const [notice,setNotice] = useState("");
+  const [activeView,setActiveView] = useState<"fuelings"|"authorizations">("fuelings");
 
   const load = useCallback(async () => {
     if (!supabase) { setError("Banco de dados não configurado."); setLoading(false); return; }
@@ -101,10 +103,12 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   const button: React.CSSProperties={border:0,borderRadius:7,padding:"10px 13px",background:"#4169df",color:"#fff",fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7};
   const mutedButton: React.CSSProperties={...button,background:"#f1f5f9",color:"#334155",border:"1px solid #e2e8f0"};
   const panel: React.CSSProperties={background:"#fff",border:"1px solid #e8edf3",borderRadius:11,padding:18,marginBottom:16};
+  if(activeView === "authorizations") return <FuelAuthorizationsManager organizationId={organizationId} onBackToFuelings={() => setActiveView("fuelings")} />;
+
   return <section aria-label="Controle de abastecimentos">
     <div style={{...panel,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div><h2 style={{margin:"0 0 6px",fontSize:17}}>Controle de abastecimentos</h2><p style={{margin:0,color:"#7d899b",fontSize:12}}>Lançamentos, leituras e custos por veículo/equipamento.</p></div>
-      <div style={{display:"flex",gap:8}}><button style={mutedButton} onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Atualizar</button><button style={button} onClick={create} disabled={!vehicles.some(v=>v.status==="active")}><Plus size={15}/> Novo abastecimento</button></div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button style={mutedButton} onClick={()=>setActiveView("authorizations")}><FileText size={15}/> Autorizações PDF</button><button style={mutedButton} onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Atualizar</button><button style={button} onClick={create} disabled={!vehicles.some(v=>v.status==="active")}><Plus size={15}/> Novo abastecimento</button></div>
     </div>
     {error&&<div role="alert" style={{...panel,color:"#b42318",display:"flex",gap:8,alignItems:"center"}}><AlertCircle size={17}/>{error}</div>}
     {notice&&<div role="status" style={{...panel,color:"#16794b",display:"flex",gap:8,alignItems:"center"}}><CheckCircle2 size={17}/>{notice}<button style={{...mutedButton,marginLeft:"auto"}} onClick={()=>setNotice("")}><X size={14}/></button></div>}
