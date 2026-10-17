@@ -9,6 +9,7 @@ const sample: FuelAuthorizationPdfData = {
     valid_until: "2026-10-18T12:00:00.000Z",
     max_liters: 150,
     max_amount_cents: 85000,
+    consumed_liters: 0,
     status: "active",
     created_at: "2026-10-17T11:00:00.000Z"
   },
@@ -43,6 +44,15 @@ describe("fuel authorization PDF", () => {
     expect(output).toContain("PRECO POR LITRO");
     expect(output).toContain("VALOR TOTAL");
     expect(output).toContain("RECORTAR");
+  });
+
+  it("marks already settled authorizations as completed and not reusable", () => {
+    const pdf = createFuelAuthorizationPdf({
+      ...sample,
+      authorization: { ...sample.authorization, consumed_liters: 35 }
+    });
+    expect(pdf.output()).toContain("CONCLU");
+    expect(pdf.output()).toContain("Nao utilizar para novo abastecimento");
   });
 
   it("marks cancelled authorizations as not valid for use", () => {

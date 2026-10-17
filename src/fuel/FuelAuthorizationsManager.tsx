@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
-  authorizationConsumptionExceedsLimit, authorizationDisplayStatus, blankAuthorizationDraft, nextAuthorizationCode,
+  authorizationConsumptionExceedsLimit, authorizationWorkflowStatus, blankAuthorizationDraft, nextAuthorizationCode,
   validateAuthorizationDraft, type AuthorizationDraft
 } from "./fuelAuthorizationUtils";
 import { downloadFuelAuthorizationPdf, type FuelAuthorizationPdfData } from "./fuelAuthorizationPdf";
@@ -28,7 +28,7 @@ type Authorization = {
   consumed_liters: number | string; consumed_amount_cents: number | string;
   status: string; created_by: string | null; created_at: string;
 };
-type FilterStatus = "all" | "active" | "scheduled" | "expired" | "inactive" | "cancelled";
+type FilterStatus = "all" | "active" | "scheduled" | "expired" | "inactive" | "cancelled" | "settled";
 
 const fieldStyle: CSSProperties = {
   width: "100%", minWidth: 0, boxSizing: "border-box", border: "1px solid #dbe2ea",
@@ -59,7 +59,8 @@ const statusPill = (status: string): CSSProperties => {
     scheduled: { bg: "#dbeafe", color: "#1d4ed8" },
     expired: { bg: "#fef3c7", color: "#92400e" },
     inactive: { bg: "#e2e8f0", color: "#475569" },
-    cancelled: { bg: "#fee2e2", color: "#b91c1c" }
+    cancelled: { bg: "#fee2e2", color: "#b91c1c" },
+    settled: { bg: "#dcfce7", color: "#166534" }
   };
   const tone = tones[status] ?? tones.inactive;
   return { display: "inline-flex", padding: "4px 8px", borderRadius: 20, background: tone.bg, color: tone.color, fontSize: 11, fontWeight: 750, whiteSpace: "nowrap" };
@@ -161,14 +162,15 @@ export function FuelAuthorizationsManager({
   const vehicleMap = useMemo(() => new Map(vehicles.map(row => [row.id, row])), [vehicles]);
   const driverMap = useMemo(() => new Map(drivers.map(row => [row.id, row])), [drivers]);
   const supplierMap = useMemo(() => new Map(suppliers.map(row => [row.id, row])), [suppliers]);
-  const activeCount = authorizations.filter(row => authorizationDisplayStatus(row.status, row.valid_from, row.valid_until).key === "active").length;
-  const scheduledCount = authorizations.filter(row => authorizationDisplayStatus(row.status, row.valid_from, row.valid_until).key === "scheduled").length;
-  const expiredCount = authorizations.filter(row => authorizationDisplayStatus(row.status, row.valid_from, row.valid_until).key === "expired").length;
+  const activeCount = authorizations.filter(row => authorizationWorkflowStatus(row.status, row.valid_from, row.valid_until, row.consumed_liters).key === "active").length;
+  const scheduledCount = authorizations.filter(row => authorizationWorkflowStatus(row.status, row.valid_from, row.valid_until, row.consumed_liters).key === "scheduled").length;
+  const expiredCount = authorizations.filter(row => authorizationWorkflowStatus(row.status, row.valid_from, row.valid_until, row.consumed_liters).key === "expired").length;
+  const settledCount = authorizations.filter(row => authorizationWorkflowStatus(row.status, row.valid_from, row.valid_until, row.consumed_liters).key === "settled").length;
 
   const visible = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return authorizations.filter(row => {
-      const state = authorizationDisplayStatus(row.status, row.valid_from, row.valid_until).key;
+      const state = authorizationWorkflowStatus(row.status, row.valid_from, row.valid_until, row.consumed_liters).key;
       if (statusFilter !== "all" && state !== statusFilter) return false;
       if (!term) return true;
       const vehicle = vehicleMap.get(row.vehicle_id);
@@ -333,7 +335,8 @@ export function FuelAuthorizationsManager({
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 12 }}>
       <article style={panelStyle}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748b", fontSize: 12, fontWeight: 650 }}>Autorizações válidas <span style={{ color: "#047857" }}><ShieldCheck size={18}/></span></div><strong style={{ display: "block", marginTop: 10, fontSize: 25, color: "#172033" }}>{loading ? "—" : activeCount}</strong><small style={{ color: "#64748b" }}>Dentro do período e ativas</small></article>
       <article style={panelStyle}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748b", fontSize: 12, fontWeight: 650 }}>Agendadas <span style={{ color: "#1d4ed8" }}><ClipboardList size={18}/></span></div><strong style={{ display: "block", marginTop: 10, fontSize: 25, color: "#172033" }}>{loading ? "—" : scheduledCount}</strong><small style={{ color: "#64748b" }}>Validade ainda não iniciada</small></article>
-      <article style={panelStyle}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748b", fontSize: 12, fontWeight: 650 }}>Expiradas <span style={{ color: "#b45309" }}><FileText size={18}/></span></div><strong style={{ display: "block", marginTop: 10, fontSize: 25, color: "#172033" }}>{loading ? "—" : expiredCount}</strong><small style={{ color: "#64748b" }}>Mantidas no histórico</small></article>
+      <article style={panelStyle}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748b", fontSize: 12, fontWeight: 650 }}>Expiradas <span style={{ color: "#b45309" }}><FileText size={18}/></span></div><strong style={{ display: "block", marginTop: 10, fontSize: 25, color: "#172033" }}>{loading ? "—" : expiredCount}</strong><small style={{ color: "#64748b" }}>Sem baixa registrada</small></article>
+      <article style={panelStyle}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", color: "#64748b", fontSize: 12, fontWeight: 650 }}>Concluídas <span style={{ color: "#047857" }}><CheckCircle2 size={18}/></span></div><strong style={{ display: "block", marginTop: 10, fontSize: 25, color: "#172033" }}>{loading ? "—" : settledCount}</strong><small style={{ color: "#64748b" }}>Baixa registrada no sistema</small></article>
     </div>
 
     <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", color: "#1e3a8a", borderRadius: 10, padding: "11px 13px", fontSize: 12, lineHeight: 1.55 }}>
@@ -373,7 +376,7 @@ export function FuelAuthorizationsManager({
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 9 }}>
           <label style={labelStyle}><span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><Search size={13}/> Buscar</span><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Número, veículo, placa, motorista, posto" style={fieldStyle}/></label>
-          <label style={labelStyle}>Situação<select value={statusFilter} onChange={event => setStatusFilter(event.target.value as FilterStatus)} style={fieldStyle}><option value="all">Todas</option><option value="active">Válidas</option><option value="scheduled">Agendadas</option><option value="expired">Expiradas</option><option value="inactive">Inativas</option><option value="cancelled">Canceladas</option></select></label>
+          <label style={labelStyle}>Situação<select value={statusFilter} onChange={event => setStatusFilter(event.target.value as FilterStatus)} style={fieldStyle}><option value="all">Todas</option><option value="active">Válidas</option><option value="scheduled">Agendadas</option><option value="expired">Expiradas</option><option value="inactive">Inativas</option><option value="cancelled">Canceladas</option><option value="settled">Concluídas</option></select></label>
         </div>
       </div>
       <div style={{ overflowX: "auto" }}>
@@ -384,7 +387,7 @@ export function FuelAuthorizationsManager({
               const vehicle = vehicleMap.get(row.vehicle_id);
               const driver = row.driver_id ? driverMap.get(row.driver_id) : undefined;
               const supplier = row.supplier_id ? supplierMap.get(row.supplier_id) : undefined;
-              const state = authorizationDisplayStatus(row.status, row.valid_from, row.valid_until);
+              const state = authorizationWorkflowStatus(row.status, row.valid_from, row.valid_until, row.consumed_liters);
               const exceedsLimit = authorizationConsumptionExceedsLimit(
                 row.consumed_liters, row.consumed_amount_cents, row.max_liters, row.max_amount_cents
               );

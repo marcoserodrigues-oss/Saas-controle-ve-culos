@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import { authorizationDisplayStatus } from "./fuelAuthorizationUtils";
+import { authorizationWorkflowStatus } from "./fuelAuthorizationUtils";
 
 export type FuelAuthorizationPdfData = {
   authorization: {
@@ -8,6 +8,7 @@ export type FuelAuthorizationPdfData = {
     valid_until: string;
     max_liters: number | string | null;
     max_amount_cents: number | string | null;
+    consumed_liters: number | string;
     status: string;
     created_at: string;
   };
@@ -62,14 +63,15 @@ export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPD
   const copyWidth = pageWidth - margin * 2;
   const copyHeight = 137;
   const auth = data.authorization;
-  const state = authorizationDisplayStatus(auth.status, auth.valid_from, auth.valid_until);
+  const state = authorizationWorkflowStatus(auth.status, auth.valid_from, auth.valid_until, auth.consumed_liters);
   const active = state.key === "active";
   const stateColors: Record<string, [number, number, number]> = {
     active: [5, 120, 87],
     scheduled: [29, 78, 216],
     expired: [180, 83, 9],
     inactive: [100, 116, 139],
-    cancelled: [185, 28, 28]
+    cancelled: [185, 28, 28],
+    settled: [5, 120, 87]
   };
   const organization = data.organization;
   const vehicle = data.vehicle;
