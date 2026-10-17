@@ -484,10 +484,10 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     }
 
     setSaving(true); setError(""); setNotice("");
-    if (layoutMoveTarget && placementEvent(kind)) {
+    if (placementEvent(kind)) {
       const movement = await supabase.rpc("move_tire_to_position", {
         p_tire_id: tire.id,
-        p_target_position_id: layoutMoveTarget,
+        p_target_position_id: layoutMoveTarget ?? positionId,
         p_meter_value: meter,
         p_occurred_at: new Date(eventForm.occurred_at).toISOString(),
         p_reason: eventForm.reason.trim() || null,
@@ -592,6 +592,15 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     selectedLayoutTemplate.layout.every(lp => layoutPositionByCode.get(lp.code.toLocaleLowerCase("pt-BR"))?.is_active));
   const stockForLayout = tires.filter(t => t.status === "in_stock" &&
     (!search || [t.serial_number,t.brand ?? "",t.model ?? "",t.size].some(v => v.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR")))));
+  const mountedElsewhereForLayout = layoutVehicle ? tires.filter(t => {
+    if (t.status !== "mounted") return false;
+    const place = latestPlacement.get(t.id);
+    if (!place?.vehicle_id || place.vehicle_id === layoutVehicle.id) return false;
+    const sourceVehicle = vehicleMap.get(place.vehicle_id);
+    const sourcePosition = place.position_id ? positionMap.get(place.position_id) : null;
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    return !term || [t.serial_number,t.brand ?? "",t.model ?? "",t.size,sourceVehicle?.description ?? "",sourceVehicle?.plate ?? "",sourcePosition?.position_label ?? "",sourcePosition?.position_code ?? ""].some(v => v.toLocaleLowerCase("pt-BR").includes(term));
+  }) : [];
 
   return <section className="tire-manager">
     <div className="tire-toolbar">
@@ -709,6 +718,21 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                   <span className="tire-stock-grip"><Settings2 size={15}/></span><div><strong>{t.serial_number}</strong><small>{t.size}{t.brand ? " · " + t.brand : ""}</small></div><span className="tire-stock-badge">Estoque</span>
                 </div>)}
                 {!stockForLayout.length && <div className="tire-empty"><CircleDot size={20}/><strong>Nenhum pneu disponível</strong><span>Cadastre ou desmonte um pneu para movimentá-lo.</span></div>}
+              </div>
+              <div className="tire-stock-section-heading"><h4>Pneus montados em outros veículos</h4><span className="tire-stock-count">{mountedElsewhereForLayout.length}</span></div>
+              <p className="tire-stock-section-help">Arraste um pneu de outro ativo para uma posição vazia. Se o destino estiver ocupado, o sistema troca os dois pneus e grava a transferência/rodízio no histórico.</p>
+              <div className="tire-stock-list tire-stock-other-list">
+                {mountedElsewhereForLayout.map(t => {
+                  const place = latestPlacement.get(t.id);
+                  const sourceVehicle = place?.vehicle_id ? vehicleMap.get(place.vehicle_id) : null;
+                  const sourcePosition = place?.position_id ? positionMap.get(place.position_id) : null;
+                  return <div key={t.id} className={"tire-stock-item " + (layoutReady ? "draggable" : "disabled")} draggable={layoutReady} onDragStart={e => { if (layoutReady) startDrag(e,t.id); else e.preventDefault(); }} title={layoutReady ? "Arraste para uma posição no veículo selecionado" : "Aplique primeiro o esquema"}>
+                    <span className="tire-stock-grip"><Settings2 size={15}/></span>
+                    <div><strong>{t.serial_number}</strong><small>{t.size}{t.brand ? " · " + t.brand : ""}</small><small>Origem: {sourceVehicle?.description ?? "Veículo"}{sourcePosition ? " · " + sourcePosition.position_label : ""}</small></div>
+                    <span className="tire-stock-badge tire-mounted-badge">Montado</span>
+                  </div>;
+                })}
+                {!mountedElsewhereForLayout.length && <div className="tire-empty tire-empty-compact"><strong>Nenhum pneu montado em outro veículo</strong><span>As transferências aparecerão aqui quando houver pneus montados em outro ativo.</span></div>}
               </div>
               <div className="tire-diagram-help"><strong>Como usar</strong><ol><li>Aplique o esquema correspondente ao veículo.</li><li>Arraste um pneu em estoque para uma posição vazia para montá-lo.</li><li>Arraste um pneu montado para outra posição para registrar um rodízio; se houver outro pneu, os dois trocarão de posição.</li><li>Confirme data, leitura e observações no formulário que será aberto.</li></ol></div>
             </aside>
