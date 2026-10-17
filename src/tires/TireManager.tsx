@@ -330,6 +330,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     setEventForm(f => ({...f,event_type:type}));
   }
   function openEventForm(tireId = "") {
+    setLayoutMoveTarget(null);
     const next = {...emptyEvent(),tire_id:tireId};
     const placement = tireId ? latestPlacement.get(tireId) : undefined;
     if (placement) { next.vehicle_id = placement.vehicle_id ?? ""; next.position_id = placement.position_id ?? ""; }
@@ -343,6 +344,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       setError("O esquema selecionado não corresponde ao tipo deste ativo.");
       return;
     }
+    const templateCodes = new Set(selectedLayoutTemplate.layout.map(p => p.code.toLocaleLowerCase("pt-BR")));
+    const unsafeInactive = positions.some(p => p.vehicle_id === layoutVehicle.id && !p.is_active && templateCodes.has(p.position_code.toLocaleLowerCase("pt-BR")) && mountedTiresAtPosition.has(p.id));
+    if (unsafeInactive) { setError("Uma posição do esquema está inativa, mas ainda aparece ocupada no histórico atual. Revise essa posição antes de aplicar o esquema."); return; }
     setSaving(true); setError(""); setNotice("");
     const update = await supabase.from("vehicles")
       .update({tire_layout_template_id:selectedLayoutTemplate.id})
@@ -729,7 +733,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);}} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveEvent}><div className="vehicle-fields tire-event-fields">
         <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? "",position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
-        <label>Tipo de evento<select required value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
+        <label>Tipo de evento<select required disabled={Boolean(layoutMoveTarget)} value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
         <label>Data e hora<input required type="datetime-local" value={eventForm.occurred_at} onChange={e=>setEventForm(f=>({...f,occurred_at:e.target.value}))}/></label>
         <label>Leitura no ativo (km/horas)<input type="number" min="0" step="0.1" value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/></label>
         <label>Custo do evento (R$)<input type="number" min="0" step="0.01" value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/></label>
