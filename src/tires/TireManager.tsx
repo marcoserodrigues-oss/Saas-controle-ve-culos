@@ -17,8 +17,10 @@ type TireForm = { serial_number: string; brand: string; model: string; size: str
 type EventForm = { tire_id: string; event_type: EventType; occurred_at: string; vehicle_id: string; position_id: string; meter_value: string; cost: string; supplier_id: string; reason: string; notes: string; target_status: TireStatus };
 type PositionForm = { vehicle_id: string; position_code: string; position_label: string };
 
-const emptyTire = (): TireForm => ({ serial_number: "", brand: "", model: "", size: "", purchase_date: new Date().toISOString().slice(0,10), purchase_cost: "" });
-const emptyEvent = (): EventForm => ({ tire_id: "", event_type: "mount", occurred_at: new Date().toISOString().slice(0,16), vehicle_id: "", position_id: "", meter_value: "", cost: "", supplier_id: "", reason: "", notes: "", target_status: "in_stock" });
+const localDatePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,10);
+const localDateTimePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,16);
+const emptyTire = (): TireForm => ({ serial_number: "", brand: "", model: "", size: "", purchase_date: localDatePart(), purchase_cost: "" });
+const emptyEvent = (): EventForm => ({ tire_id: "", event_type: "mount", occurred_at: localDateTimePart(), vehicle_id: "", position_id: "", meter_value: "", cost: "", supplier_id: "", reason: "", notes: "", target_status: "in_stock" });
 const statusLabels: Record<TireStatus,string> = { in_stock: "Em estoque", mounted: "Montado", retread: "Em recapagem", repair: "Em reparo", scrapped: "Descartado", sold: "Vendido" };
 const eventLabels: Record<EventType,string> = { purchase: "Compra / cadastro", mount: "Montagem", dismount: "Desmontagem", rotation: "Rodízio", transfer: "Transferência", retread_sent: "Enviado para recapagem", retread_returned: "Retorno da recapagem", repair: "Reparo", inspection: "Inspeção", scrap: "Descarte", adjustment: "Ajuste de status" };
 const eventTypes: EventType[] = ["mount","dismount","rotation","transfer","retread_sent","retread_returned","repair","inspection","scrap","adjustment"];
@@ -734,7 +736,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       <form onSubmit={saveEvent}><div className="vehicle-fields tire-event-fields">
         <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? "",position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
         <label>Tipo de evento<select required disabled={Boolean(layoutMoveTarget)} value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
-        <label>Data e hora<input required type="datetime-local" value={eventForm.occurred_at} onChange={e=>setEventForm(f=>({...f,occurred_at:e.target.value}))}/></label>
+        <label>Data e hora<input required type="datetime-local" disabled={Boolean(layoutMoveTarget)} value={eventForm.occurred_at} onChange={e=>setEventForm(f=>({...f,occurred_at:e.target.value}))}/></label>
         <label>Leitura no ativo (km/horas)<input type="number" min="0" step="0.1" value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/></label>
         <label>Custo do evento (R$)<input type="number" min="0" step="0.01" value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/></label>
         <label>Fornecedor / recapadora<select value={eventForm.supplier_id} onChange={e=>setEventForm(f=>({...f,supplier_id:e.target.value}))}><option value="">Não informado</option>{suppliers.filter(s=>s.status==="active").map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
