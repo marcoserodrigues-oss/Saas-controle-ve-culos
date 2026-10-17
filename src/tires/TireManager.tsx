@@ -378,7 +378,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           {!filteredTires.length && <tr><td colSpan={8}><div className="tire-empty"><History size={22}/><strong>Nenhum pneu encontrado</strong><span>Ajuste a pesquisa ou cadastre pneus e eventos.</span></div></td></tr>}
         </tbody></table></div>
         <p className="tire-footnote">A quilometragem soma apenas trechos em que as leituras inicial e final são válidas e pertencem ao mesmo veículo. Dias em ciclos concluídos contam do primeiro registro de montagem até desmontagem/saída de operação; duração atual é mostrada separadamente para pneus montados. Não se estima dado ausente.</p>
-      </div>
+      </div>} 
     </>}
     <p className="tire-footnote">A duração em km é estimada apenas nos ciclos com montagem e desmontagem registrados no mesmo veículo e com leituras válidas. Não representa quilometragem de vida útil completa quando faltarem eventos históricos.</p>
 
