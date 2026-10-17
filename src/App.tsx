@@ -6,6 +6,7 @@ import { MaintenanceManager } from "./maintenance/MaintenanceManager";
 import { TireManager } from "./tires/TireManager";
 import { Dashboard } from "./dashboard/Dashboard";
 import { ReportsManager } from "./reports/ReportsManager";
+import { ExpensesManager } from "./expenses/ExpensesManager";
 import {
   AlertTriangle, ArrowUpRight, Bell,
   CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel, Gauge,
@@ -101,7 +102,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
           </div>
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
-          {activeModule === "dashboard" && organizationId ? <Dashboard organizationId={organizationId} onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : activeModule === "tires" && organizationId ? <TireManager organizationId={organizationId} /> : activeModule === "reports" && organizationId ? <ReportsManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
+          {activeModule === "dashboard" && organizationId ? <Dashboard organizationId={organizationId} onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : activeModule === "tires" && organizationId ? <TireManager organizationId={organizationId} /> : activeModule === "expenses" && organizationId ? <ExpensesManager organizationId={organizationId} /> : activeModule === "reports" && organizationId ? <ReportsManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
           <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>Fleetwise · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
         </div>
       </main>
