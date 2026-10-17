@@ -64,14 +64,31 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
       model_year: form.model_year ? Number(form.model_year) : null,
       vin: form.vin.trim().toUpperCase() || null
     };
-    const request = editingId
-      ? supabase.from("vehicles").update(payload).eq("id", editingId).eq("organization_id", organizationId)
-      : supabase.from("vehicles").insert(payload);
-    const { error: saveError } = await request;
+    let saveError: { code?: string } | null = null;
+    let saved = false;
+    if (editingId) {
+      const { data, error } = await supabase.from("vehicles")
+        .update(payload)
+        .eq("id", editingId)
+        .eq("organization_id", organizationId)
+        .select("id")
+        .maybeSingle();
+      saveError = error;
+      saved = Boolean(data);
+    } else {
+      const { data, error } = await supabase.from("vehicles")
+        .insert(payload)
+        .select("id")
+        .maybeSingle();
+      saveError = error;
+      saved = Boolean(data);
+    }
     if (saveError) {
       setError(saveError.code === "23505"
         ? "Já existe um ativo com esse código, placa ou chassi nesta organização."
         : "Não foi possível salvar. Confira os campos e as permissões do banco.");
+    } else if (!saved) {
+      setError("Nenhuma alteração foi confirmada. Atualize a lista e confira se o cadastro ainda existe e se você tem permissão.");
     } else {
       setForm(emptyForm);
       setEditingId(null);
@@ -112,6 +129,6 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
       <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}>Cancelar</button><button type="submit" className="primary-button" disabled={saving}>{saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar cadastro"}</button></div>
     </form>}
     <div className="vehicle-list-toolbar"><label className="vehicle-search"><Search size={15} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por código, placa, descrição ou modelo" /></label><span>{filtered.length} {filtered.length === 1 ? "registro" : "registros"}</span></div>
-    {loading ? <div className="vehicle-empty"><RefreshCw size={22} /><strong>Carregando cadastros...</strong></div> : filtered.length === 0 ? <div className="vehicle-empty"><div className="vehicle-empty-icon"><Truck size={24} /></div><strong>{search ? "Nenhum resultado para essa busca" : "Nenhum ativo cadastrado"}</strong><p>{search ? "Tente pesquisar com outro código ou placa." : "Cadastre o primeiro veículo ou equipamento para começar a construir o histórico operacional."}</p>{!search && <button className="primary-button" onClick={() => setShowForm(true)}><Plus size={15} /> Cadastrar primeiro ativo</button>}</div> : <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Ativo</th><th>Tipo</th><th>Medidor</th><th>Combustível</th><th>Status</th><th>Ações</th></tr></thead><tbody>{filtered.map((vehicle) => <tr key={vehicle.id}><td><div className="vehicle-name"><span className="vehicle-row-icon"><Truck size={16} /></span><span><strong>{vehicle.description}</strong><small>{vehicle.code}{vehicle.plate ? " · "+vehicle.plate : ""}</small></span></div></td><td>{vehicle.kind === "equipment" ? "Equipamento" : "Veículo"}</td><td>{vehicle.meter_kind === "hourmeter" ? "Horímetro (h)" : "Hodômetro (km)"}</td><td>{({ diesel:"Diesel", gasoline:"Gasolina", ethanol:"Etanol", gnv:"GNV", electric:"Elétrico", other:"Outro" } as Record<FuelType,string>)[vehicle.fuel_type]}</td><td><span className={`vehicle-status ${vehicle.status}`}>{vehicle.status === "active" ? "Ativo" : vehicle.status === "inactive" ? "Inativo" : "Cancelado"}</span></td><td><div className="vehicle-row-actions"><button type="button" className="icon-button" aria-label={`Editar ${vehicle.description}`} title="Editar cadastro" onClick={() => { setForm({ code: vehicle.code, description: vehicle.description, plate: vehicle.plate ?? "", vin: vehicle.vin ?? "", kind: vehicle.kind, meter_kind: vehicle.meter_kind, fuel_type: vehicle.fuel_type, make: vehicle.make ?? "", model: vehicle.model ?? "", model_year: vehicle.model_year == null ? "" : String(vehicle.model_year) }); setEditingId(vehicle.id); setShowForm(true); setError(""); setNotice(""); }}><Pencil size={15} /></button>{vehicle.status !== "cancelled" && <button type="button" className="icon-button" aria-label={vehicle.status === "active" ? `Inativar ${vehicle.description}` : `Reativar ${vehicle.description}`} title={vehicle.status === "active" ? "Inativar sem apagar histórico" : "Reativar cadastro"} onClick={async () => { if (!supabase) return; setError(""); setNotice(""); const nextStatus = vehicle.status === "active" ? "inactive" : "active"; const { error: statusError } = await supabase.from("vehicles").update({ status: nextStatus }).eq("id", vehicle.id).eq("organization_id", organizationId); if (statusError) { setError("Não foi possível alterar o status deste ativo."); } else { setNotice(nextStatus === "inactive" ? "Ativo inativado; o histórico foi preservado." : "Ativo reativado."); await loadVehicles(); } }}><Power size={15} /></button>}</div></td></tr>)}</tbody></table></div>}
+    {loading ? <div className="vehicle-empty"><RefreshCw size={22} /><strong>Carregando cadastros...</strong></div> : filtered.length === 0 ? <div className="vehicle-empty"><div className="vehicle-empty-icon"><Truck size={24} /></div><strong>{search ? "Nenhum resultado para essa busca" : "Nenhum ativo cadastrado"}</strong><p>{search ? "Tente pesquisar com outro código ou placa." : "Cadastre o primeiro veículo ou equipamento para começar a construir o histórico operacional."}</p>{!search && <button className="primary-button" onClick={() => setShowForm(true)}><Plus size={15} /> Cadastrar primeiro ativo</button>}</div> : <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Ativo</th><th>Tipo</th><th>Medidor</th><th>Combustível</th><th>Status</th><th>Ações</th></tr></thead><tbody>{filtered.map((vehicle) => <tr key={vehicle.id}><td><div className="vehicle-name"><span className="vehicle-row-icon"><Truck size={16} /></span><span><strong>{vehicle.description}</strong><small>{vehicle.code}{vehicle.plate ? " · "+vehicle.plate : ""}</small></span></div></td><td>{vehicle.kind === "equipment" ? "Equipamento" : "Veículo"}</td><td>{vehicle.meter_kind === "hourmeter" ? "Horímetro (h)" : "Hodômetro (km)"}</td><td>{({ diesel:"Diesel", gasoline:"Gasolina", ethanol:"Etanol", gnv:"GNV", electric:"Elétrico", other:"Outro" } as Record<FuelType,string>)[vehicle.fuel_type]}</td><td><span className={`vehicle-status ${vehicle.status}`}>{vehicle.status === "active" ? "Ativo" : vehicle.status === "inactive" ? "Inativo" : "Cancelado"}</span></td><td><div className="vehicle-row-actions"><button type="button" className="icon-button" aria-label={`Editar ${vehicle.description}`} title="Editar cadastro" onClick={() => { setForm({ code: vehicle.code, description: vehicle.description, plate: vehicle.plate ?? "", vin: vehicle.vin ?? "", kind: vehicle.kind, meter_kind: vehicle.meter_kind, fuel_type: vehicle.fuel_type, make: vehicle.make ?? "", model: vehicle.model ?? "", model_year: vehicle.model_year == null ? "" : String(vehicle.model_year) }); setEditingId(vehicle.id); setShowForm(true); setError(""); setNotice(""); }}><Pencil size={15} /></button>{vehicle.status !== "cancelled" && <button type="button" className="icon-button" aria-label={vehicle.status === "active" ? `Inativar ${vehicle.description}` : `Reativar ${vehicle.description}`} title={vehicle.status === "active" ? "Inativar sem apagar histórico" : "Reativar cadastro"} onClick={async () => { if (!supabase) return; setError(""); setNotice(""); const nextStatus = vehicle.status === "active" ? "inactive" : "active"; const { data: updatedVehicle, error: statusError } = await supabase.from("vehicles").update({ status: nextStatus }).eq("id", vehicle.id).eq("organization_id", organizationId).select("id").maybeSingle(); if (statusError) { setError("Não foi possível alterar o status deste ativo."); } else if (!updatedVehicle) { setError("A alteração de status não foi confirmada. Atualize a lista e tente novamente."); } else { setNotice(nextStatus === "inactive" ? "Ativo inativado; o histórico foi preservado." : "Ativo reativado."); await loadVehicles(); } }}><Power size={15} /></button>}</div></td></tr>)}</tbody></table></div>}
   </section>;
 }
