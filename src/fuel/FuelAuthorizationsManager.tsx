@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import {
-  authorizationConsumptionExceedsLimit, authorizationDisplayStatus, authorizationWorkflowStatus, blankAuthorizationDraft, nextAuthorizationCode,
+  authorizationConsumptionExceedsLimit, authorizationWorkflowStatus, blankAuthorizationDraft, nextAuthorizationCode,
   validateAuthorizationDraft, type AuthorizationDraft
 } from "./fuelAuthorizationUtils";
 import { downloadFuelAuthorizationPdf, type FuelAuthorizationPdfData } from "./fuelAuthorizationPdf";
