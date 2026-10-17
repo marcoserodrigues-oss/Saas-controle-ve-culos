@@ -7,7 +7,7 @@ import "./styles.css";
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <AuthGate>
-      {({ organizationId, organizationName }) => <App organizationId={organizationId} organizationName={organizationName} />}
+      {({ organizationId, organizationName, userEmail }) => <App organizationId={organizationId} organizationName={organizationName} userEmail={userEmail} />}
     </AuthGate>
   </React.StrictMode>
 );

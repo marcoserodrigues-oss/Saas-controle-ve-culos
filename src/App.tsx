@@ -36,7 +36,9 @@ function formatToday() {
   return new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date());
 }
 
-function App({ organizationId, organizationName }: { organizationId?: string | null; organizationName?: string | null } = {}) {
+function App({ organizationId, organizationName, userEmail }: { organizationId?: string | null; organizationName?: string | null; userEmail?: string | null } = {}) {
+  const userDisplayName = userEmail?.split("@")[0]?.replace(/[._-]+/g, " ") || "Usuário";
+  const userInitials = userDisplayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "US";
   const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -73,7 +75,7 @@ function App({ organizationId, organizationName }: { organizationId?: string | n
         <div className="sidebar-bottom">
           <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>Precisa de ajuda?</strong><p>Consulte a documentação e as regras do sistema.</p><button onClick={() => setActiveModule("reports")}>Ver orientações <span>↗</span></button></div>
           <button className="nav-item settings-item" onClick={() => setActiveModule("people")}><Settings size={18} /><span>Configurações</span></button>
-          <div className="user-profile"><div className="user-avatar">AD</div><div className="user-copy"><strong>Administrador</strong><span>Ambiente inicial</span></div><ChevronDown size={16} className="muted" /></div>
+          <div className="user-profile"><div className="user-avatar">{userInitials}</div><div className="user-copy"><strong>{userDisplayName}</strong><span>{userEmail ?? "Conta autenticada"}</span></div><ChevronDown size={16} className="muted" /></div>
         </div>
       </aside>
 
@@ -83,7 +85,7 @@ function App({ organizationId, organizationName }: { organizationId?: string | n
           <div className="topbar-actions">
             <label className="global-search"><Search size={16} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar no sistema..." aria-label="Buscar no sistema" /><kbd>⌘ K</kbd></label>
             <button className="icon-button notification-button" aria-label="Notificações"><Bell size={18} /><i /></button>
-            <div className="top-user"><div className="user-avatar">AD</div><ChevronDown size={15} className="muted" /></div>
+            <div className="top-user"><div className="user-avatar" title={userEmail ?? "Conta autenticada"}>{userInitials}</div><ChevronDown size={15} className="muted" /></div>
           </div>
         </header>
 
