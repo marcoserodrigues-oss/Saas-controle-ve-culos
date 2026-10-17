@@ -53,9 +53,6 @@ export function parseAuthorizationLimits(
       return { error: "Informe um limite financeiro válido." };
     }
   }
-  if (max_liters === null && max_amount_cents === null) {
-    return { error: "Informe pelo menos um limite: litros ou valor financeiro." };
-  }
   return { limits: { max_liters, max_amount_cents } };
 }
 
