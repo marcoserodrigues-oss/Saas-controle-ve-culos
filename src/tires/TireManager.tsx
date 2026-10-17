@@ -108,7 +108,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       let lastMountAt: string | null = null;
       let lastEndAt: string | null = null;
       for (const event of byTire.get(tire.id) ?? []) {
-        if (event.event_type === "mount") {
+        if (event.event_type === "mount" || (event.event_type === "adjustment" && event.reason?.startsWith("Ajuste para Montado"))) {
           cycleStart = event.occurred_at;
           lastMountAt = event.occurred_at;
           segmentVehicle = event.vehicle_id;
@@ -279,7 +279,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     }
 
     setSaving(true); setError(""); setNotice("");
-    const row = {organization_id:organizationId,tire_id:tire.id,vehicle_id:vehicleId,position_id:positionId,event_type:kind,occurred_at:new Date(eventForm.occurred_at).toISOString(),meter_value:meter,cost_cents:cost,supplier_id:eventForm.supplier_id || null,reason:eventForm.reason.trim() || (kind === "adjustment" ? "Ajuste para " + statusLabels[nextStatus] : null),notes:eventForm.notes.trim() || null};
+    const row = {organization_id:organizationId,tire_id:tire.id,vehicle_id:vehicleId,position_id:positionId,event_type:kind,occurred_at:new Date(eventForm.occurred_at).toISOString(),meter_value:meter,cost_cents:cost,supplier_id:eventForm.supplier_id || null,reason:kind === "adjustment" ? "Ajuste para " + statusLabels[nextStatus] + (eventForm.reason.trim() ? " — " + eventForm.reason.trim() : "") : eventForm.reason.trim() || null,notes:eventForm.notes.trim() || null};
     const inserted = await supabase.from("tire_events").insert(row).select("id").maybeSingle();
     if (inserted.error || !inserted.data) {
       setError("Não foi possível salvar o evento. Nenhum sucesso foi confirmado pelo banco.");
