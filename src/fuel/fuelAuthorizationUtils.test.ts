@@ -24,11 +24,13 @@ describe("fuel authorization helpers", () => {
   });
 
   it("keeps only active and unused authorizations pending settlement", () => {
-    expect(isAuthorizationPendingSettlement("active", 0)).toBe(true);
-    expect(isAuthorizationPendingSettlement("active", "0.000")).toBe(true);
-    expect(isAuthorizationPendingSettlement("active", 25)).toBe(false);
-    expect(isAuthorizationPendingSettlement("cancelled", 0)).toBe(false);
-    expect(isAuthorizationPendingSettlement("inactive", 0)).toBe(false);
+    const now = new Date("2026-10-17T12:00:00.000Z");
+    expect(isAuthorizationPendingSettlement("active", 0, "2026-10-16T00:00:00Z", now)).toBe(true);
+    expect(isAuthorizationPendingSettlement("active", "0.000", "2026-10-15T00:00:00Z", now)).toBe(true);
+    expect(isAuthorizationPendingSettlement("active", 25, "2026-10-16T00:00:00Z", now)).toBe(false);
+    expect(isAuthorizationPendingSettlement("active", 0, "2026-10-18T00:00:00Z", now)).toBe(false);
+    expect(isAuthorizationPendingSettlement("cancelled", 0, "2026-10-16T00:00:00Z", now)).toBe(false);
+    expect(isAuthorizationPendingSettlement("inactive", 0, "2026-10-16T00:00:00Z", now)).toBe(false);
   });
 
   it("labels used authorizations as completed even when their validity window has passed", () => {
