@@ -179,7 +179,7 @@ BEGIN
     VALUES (v_tire.organization_id,v_tire.id,v_target.vehicle_id,v_target.id,v_event_type,p_occurred_at,p_meter_value,v_reason,p_notes,(select auth.uid()))
     RETURNING id INTO v_event_id;
     INSERT INTO public.tire_events (organization_id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,reason,notes,related_tire_event_id,created_by)
-    VALUES (v_occupied.organization_id,v_occupied.id,v_source_location.vehicle_id,v_source_location.position_id,v_related_event_type,p_occurred_at + interval '1 millisecond',null,
+    VALUES (v_occupied.organization_id,v_occupied.id,v_source_location.vehicle_id,v_source_location.position_id,v_related_event_type,p_occurred_at + interval '1 millisecond',case when v_source_location.vehicle_id = v_target.vehicle_id then p_meter_value else null end,
       'Rodízio/troca de posição com pneu ' || v_tire.serial_number,p_notes,v_event_id,(select auth.uid()))
     RETURNING id INTO v_related_event_id;
     UPDATE public.tire_events SET related_tire_event_id = v_related_event_id WHERE id = v_event_id AND organization_id = v_tire.organization_id;
