@@ -35,7 +35,7 @@ function formatToday() {
   return new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date());
 }
 
-function App() {
+function App({ organizationName }: { organizationName?: string | null } = {}) {
   const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -52,7 +52,7 @@ function App() {
         </div>
         <div className="company-switcher">
           <div className="company-avatar"><Truck size={18} /></div>
-          <div className="company-copy"><strong>Minha frota</strong><span>Ambiente operacional</span></div>
+          <div className="company-copy"><strong>{organizationName ?? "Minha frota"}</strong><span>Ambiente operacional</span></div>
           <ChevronDown size={15} className="muted" />
         </div>
         <nav className="main-nav" aria-label="Navegação principal">
