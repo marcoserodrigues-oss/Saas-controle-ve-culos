@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
-import { AlertCircle, CalendarDays, CheckCircle2, ClipboardList, Pencil, Plus, RefreshCw, Search, Wallet, X } from "lucide-react";
+import { AlertCircle, CalendarDays, CheckCircle2, ClipboardList, Pencil, Plus, RefreshCw, Wallet, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { findMatchingExpense, moneyToCents, EXPENSE_CATEGORIES } from "./expenseUtils";
 
