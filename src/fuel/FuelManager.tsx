@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { AlertCircle, CheckCircle2, FileText, Fuel, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
 import { FuelAuthorizationsManager } from "./FuelAuthorizationsManager";
-import { authorizationDisplayStatus, authorizationWorkflowStatus, isAuthorizationPendingSettlement } from "./fuelAuthorizationUtils";
+import { authorizationWorkflowStatus, isAuthorizationPendingSettlement } from "./fuelAuthorizationUtils";
 import { supabase } from "../lib/supabase";
 
 type Vehicle = { id: string; code: string; plate: string | null; description: string; meter_kind: string; fuel_type: string; status: string };
