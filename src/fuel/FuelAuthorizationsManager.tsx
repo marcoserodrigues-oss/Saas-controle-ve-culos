@@ -407,7 +407,7 @@ export function FuelAuthorizationsManager({
                 </div></td>
               </tr>;
             })}
-            {!loading && visible.length === 0 && <tr><td colSpan={7} style={{ padding: 36, textAlign: "center", color: "#64748b" }}><ClipboardList size={24} style={{ display: "block", margin: "0 auto 8px", color: "#94a3b8" }}/><strong style={{ display: "block", color: "#334155" }}>Nenhuma autorização encontrada</strong><small>Ajuste os filtros ou emita uma nova autorização para gerar o PDF.</small></td></tr>}
+            {!loading && visible.length === 0 && <tr><td colSpan={8} style={{ padding: 36, textAlign: "center", color: "#64748b" }}><ClipboardList size={24} style={{ display: "block", margin: "0 auto 8px", color: "#94a3b8" }}/><strong style={{ display: "block", color: "#334155" }}>Nenhuma autorização encontrada</strong><small>Ajuste os filtros ou emita uma nova autorização para gerar o PDF.</small></td></tr>}
           </tbody>
         </table>
       </div>
