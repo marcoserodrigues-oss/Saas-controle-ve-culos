@@ -91,7 +91,7 @@ export function isAuthorizationPendingSettlement(
 ): boolean {
   const consumed = Number(consumedLiters ?? 0);
   const start = validFrom ? new Date(validFrom).getTime() : Number.NEGATIVE_INFINITY;
-  const hasStarted = Number.isFinite(start) && start <= now.getTime();
+  const hasStarted = !validFrom || (Number.isFinite(start) && start <= now.getTime());
   return status === "active" && hasStarted && Number.isFinite(consumed) && consumed <= 0;
 }
 
