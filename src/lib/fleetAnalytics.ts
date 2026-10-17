@@ -144,13 +144,13 @@ export async function loadFleetAnalytics(
       ).order("occurred_at", { ascending: false }).order("id", { ascending: false }).range(from, to)
     )),
     fetchAllPages<FleetWorkOrder>((from, to) => fetchPage<FleetWorkOrder>(
-      rangeFilter(
-        db.from("work_orders")
-          .select("id,vehicle_id,order_number,category,description,opened_at,closed_at,labor_cost_cents,parts_cost_cents,status")
-          .eq("organization_id", organizationId)
-          .neq("status", "cancelled"),
-        startIso, endExclusiveIso, "opened_at"
-      ).order("opened_at", { ascending: false }).order("id", { ascending: false }).range(from, to)
+      db.from("work_orders")
+        .select("id,vehicle_id,order_number,category,description,opened_at,closed_at,labor_cost_cents,parts_cost_cents,status")
+        .eq("organization_id", organizationId)
+        .neq("status", "cancelled")
+        .order("opened_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to)
     )),
     fetchAllPages<FleetTire>((from, to) => fetchPage<FleetTire>(
       db.from("tires")
