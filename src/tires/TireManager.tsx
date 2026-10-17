@@ -380,7 +380,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     event.preventDefault();
     const tireId = event.dataTransfer.getData("text/plain");
     const tire = tireMap.get(tireId);
-    if (!tire || !layoutVehicle || !selectedLayoutTemplate || !position || !position.is_active) {
+    if (!layoutReady || !tire || !layoutVehicle || !selectedLayoutTemplate || !position || !position.is_active) {
       setError("Aplique um esquema e confirme que a posição está ativa antes de movimentar o pneu.");
       return;
     }
