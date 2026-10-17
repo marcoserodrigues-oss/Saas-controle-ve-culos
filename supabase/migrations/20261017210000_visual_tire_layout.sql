@@ -95,17 +95,17 @@ on conflict (code) where organization_id is null do nothing;
 create or replace function public.move_tire_to_position(
   p_tire_id uuid,
   p_target_position_id uuid,
-  p_meter_value numeric default null,
-  p_occurred_at timestamptz default now(),
-  p_reason text default null,
-  p_notes text default null
+  p_meter_value numeric DEFAULT null,
+  p_occurred_at timestamptz DEFAULT now(),
+  p_reason text DEFAULT null,
+  p_notes text DEFAULT null
 )
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $function$
-declare
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
   v_tire public.tires%rowtype;
   v_target public.vehicle_tire_positions%rowtype;
   v_source_location record;
@@ -116,135 +116,88 @@ declare
   v_event_type public.tire_event_kind;
   v_related_event_type public.tire_event_kind;
   v_reason text;
-  v_occurs_at timestamptz;
-begin
-  if p_occurred_at is null or p_occurred_at > now() + interval '1 minute' then
-    raise exception 'Data do movimento inválida.' using errcode = '22007';
-  end if;
-  if p_meter_value is not null and p_meter_value < 0 then
-    raise exception 'A leitura do hodômetro/horímetro não pode ser negativa.' using errcode = '22003';
-  end if;
+BEGIN
+  IF p_occurred_at IS NULL OR p_occurred_at > now() + interval '1 minute' THEN
+    RAISE EXCEPTION 'Data do movimento inválida.' USING errcode = '22007';
+  END IF;
+  IF p_meter_value IS NOT NULL AND p_meter_value < 0 THEN
+    RAISE EXCEPTION 'A leitura do hodômetro/horímetro não pode ser negativa.' USING errcode = '22003';
+  END IF;
+  SELECT * INTO v_tire FROM public.tires WHERE id = p_tire_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Pneu não encontrado.' USING errcode = 'P0002'; END IF;
+  IF NOT private.has_org_role(v_tire.organization_id, array['owner','admin','manager','operator']::public.membership_role[]) THEN
+    RAISE EXCEPTION 'Você não tem permissão para movimentar pneus nesta organização.' USING errcode = '42501';
+  END IF;
+  IF v_tire.status NOT IN ('in_stock','mounted') THEN
+    RAISE EXCEPTION 'Somente pneus em estoque ou montados podem ser movimentados pelo desenho.' USING errcode = '22023';
+  END IF;
 
-  select * into v_tire
-  from public.tires
-  where id = p_tire_id
-  for update;
-  if not found then
-    raise exception 'Pneu não encontrado.' using errcode = 'P0002';
-  end if;
-  if not private.has_org_role(v_tire.organization_id, array['owner','admin','manager','operator']::public.membership_role[]) then
-    raise exception 'Você não tem permissão para movimentar pneus nesta organização.' using errcode = '42501';
-  end if;
-  if v_tire.status not in ('in_stock','mounted') then
-    raise exception 'Somente pneus em estoque ou montados podem ser movimentados pelo desenho.' using errcode = '22023';
-  end if;
+  SELECT * INTO v_target FROM public.vehicle_tire_positions
+  WHERE id = p_target_position_id AND organization_id = v_tire.organization_id AND is_active = true FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'A posição não está ativa ou não pertence à organização do pneu.' USING errcode = '23503'; END IF;
 
-  select * into v_target
-  from public.vehicle_tire_positions
-  where id = p_target_position_id
-    and organization_id = v_tire.organization_id
-    and is_active = true
-  for update;
-  if not found then
-    raise exception 'A posição não está ativa ou não pertence à organização do pneu.' using errcode = '23503';
-  end if;
+  IF v_tire.status = 'mounted' THEN
+    SELECT e.vehicle_id, e.position_id, e.occurred_at INTO v_source_location
+    FROM public.tire_events e
+    WHERE e.organization_id = v_tire.organization_id AND e.tire_id = v_tire.id
+      AND e.event_type IN ('mount','rotation','transfer')
+    ORDER BY e.occurred_at DESC, e.created_at DESC, e.id DESC LIMIT 1;
+    IF v_source_location.position_id IS NULL THEN RAISE EXCEPTION 'Não foi possível identificar a posição atual do pneu.' USING errcode = '23503'; END IF;
+    IF p_occurred_at < v_source_location.occurred_at THEN
+      RAISE EXCEPTION 'A data do movimento não pode ser anterior ao último posicionamento do pneu.' USING errcode = '22007';
+    END IF;
+    IF v_source_location.position_id = v_target.id THEN RAISE EXCEPTION 'O pneu já está nesta posição.' USING errcode = '22023'; END IF;
+  END IF;
 
-  if v_tire.status = 'mounted' then
-    select e.vehicle_id, e.position_id
-    into v_source_location
-    from public.tire_events e
-    where e.organization_id = v_tire.organization_id
-      and e.tire_id = v_tire.id
-      and e.event_type in ('mount','rotation','transfer')
-    order by e.occurred_at desc, e.created_at desc, e.id desc
-    limit 1;
-    if v_source_location.position_id is null then
-      raise exception 'Não foi possível identificar a posição atual do pneu.' using errcode = '23503';
-    end if;
-    if v_source_location.position_id = v_target.id then
-      raise exception 'O pneu já está nesta posição.' using errcode = '22023';
-    end if;
-  end if;
-
-  select t.* into v_occupied
-  from public.tires t
-  cross join lateral (
-    select e.position_id
-    from public.tire_events e
-    where e.organization_id = t.organization_id
-      and e.tire_id = t.id
-      and e.event_type in ('mount','rotation','transfer')
-    order by e.occurred_at desc, e.created_at desc, e.id desc
-    limit 1
+  SELECT t.* INTO v_occupied
+  FROM public.tires t
+  CROSS JOIN LATERAL (
+    SELECT e.position_id FROM public.tire_events e
+    WHERE e.organization_id = t.organization_id AND e.tire_id = t.id
+      AND e.event_type IN ('mount','rotation','transfer')
+    ORDER BY e.occurred_at DESC, e.created_at DESC, e.id DESC LIMIT 1
   ) latest_position
-  where t.organization_id = v_tire.organization_id
-    and t.status = 'mounted'
-    and t.id <> v_tire.id
-    and latest_position.position_id = v_target.id
-  order by t.id
-  limit 1
-  for update of t;
+  WHERE t.organization_id = v_tire.organization_id AND t.status = 'mounted'
+    AND t.id <> v_tire.id AND latest_position.position_id = v_target.id
+  ORDER BY t.id LIMIT 1 FOR UPDATE OF t;
 
-  v_occurs_at := p_occurred_at;
   v_reason := coalesce(nullif(trim(p_reason),''), 'Movimentação pelo desenho de pneus');
+  IF FOUND THEN
+    IF v_tire.status <> 'mounted' THEN RAISE EXCEPTION 'A posição está ocupada. Selecione o pneu que já está montado para fazer o rodízio.' USING errcode = '23505'; END IF;
+    SELECT e.vehicle_id, e.position_id, e.occurred_at INTO v_occupied_location
+    FROM public.tire_events e WHERE e.organization_id = v_occupied.organization_id AND e.tire_id = v_occupied.id
+      AND e.event_type IN ('mount','rotation','transfer')
+    ORDER BY e.occurred_at DESC, e.created_at DESC, e.id DESC LIMIT 1;
+    IF p_occurred_at < v_occupied_location.occurred_at THEN
+      RAISE EXCEPTION 'A data do rodízio não pode ser anterior ao último posicionamento do pneu que será trocado.' USING errcode = '22007';
+    END IF;
 
-  if found then
-    if v_tire.status <> 'mounted' then
-      raise exception 'A posição está ocupada. Monte primeiro o pneu selecionado em uma posição vazia.' using errcode = '23505';
-    end if;
-    select e.vehicle_id, e.position_id
-    into v_occupied_location
-    from public.tire_events e
-    where e.organization_id = v_occupied.organization_id
-      and e.tire_id = v_occupied.id
-      and e.event_type in ('mount','rotation','transfer')
-    order by e.occurred_at desc, e.created_at desc, e.id desc
-    limit 1;
+    v_event_type := CASE WHEN v_source_location.vehicle_id = v_target.vehicle_id THEN 'rotation'::public.tire_event_kind ELSE 'transfer'::public.tire_event_kind END;
+    v_related_event_type := CASE WHEN v_occupied_location.vehicle_id = v_source_location.vehicle_id THEN 'rotation'::public.tire_event_kind ELSE 'transfer'::public.tire_event_kind END;
 
-    v_event_type := case when v_source_location.vehicle_id = v_target.vehicle_id then 'rotation'::public.tire_event_kind else 'transfer'::public.tire_event_kind end;
-    v_related_event_type := case when v_occupied_location.vehicle_id = v_source_location.vehicle_id then 'rotation'::public.tire_event_kind else 'transfer'::public.tire_event_kind end;
-
-    insert into public.tire_events
-      (organization_id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,reason,notes,created_by)
-    values
-      (v_tire.organization_id,v_tire.id,v_target.vehicle_id,v_target.id,v_event_type,v_occurs_at,p_meter_value,v_reason,p_notes,(select auth.uid()))
-    returning id into v_event_id;
-
-    insert into public.tire_events
-      (organization_id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,reason,notes,related_tire_event_id,created_by)
-    values
-      (v_occupied.organization_id,v_occupied.id,v_source_location.vehicle_id,v_source_location.position_id,v_related_event_type,v_occurs_at + interval '1 millisecond',null,
-       'Rodízio/troca de posição com pneu ' || v_tire.serial_number,p_notes,v_event_id,(select auth.uid()))
-    returning id into v_related_event_id;
-
-    update public.tire_events set related_tire_event_id = v_related_event_id
-    where id = v_event_id and organization_id = v_tire.organization_id;
-
-    return jsonb_build_object('success',true,'action','swap','tire_id',v_tire.id,'other_tire_id',v_occupied.id,
-      'event_id',v_event_id,'related_event_id',v_related_event_id,'position_id',v_target.id);
-  else
-    if v_tire.status = 'in_stock' then
-      v_event_type := 'mount'::public.tire_event_kind;
-    else
-      v_event_type := case when v_source_location.vehicle_id = v_target.vehicle_id then 'rotation'::public.tire_event_kind else 'transfer'::public.tire_event_kind end;
-    end if;
-
-    insert into public.tire_events
-      (organization_id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,reason,notes,created_by)
-    values
-      (v_tire.organization_id,v_tire.id,v_target.vehicle_id,v_target.id,v_event_type,v_occurs_at,p_meter_value,v_reason,p_notes,(select auth.uid()))
-    returning id into v_event_id;
-
-    if v_tire.status = 'in_stock' then
-      update public.tires set status = 'mounted', updated_at = now()
-      where id = v_tire.id and organization_id = v_tire.organization_id;
-    end if;
-
-    return jsonb_build_object('success',true,'action',case when v_event_type = 'mount' then 'mount' else 'move' end,
-      'tire_id',v_tire.id,'event_id',v_event_id,'position_id',v_target.id);
-  end if;
-end;
+    INSERT INTO public.tire_events (organization_id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,reason,notes,created_by)
+    VALUES (v_tire.organization_id,v_tire.id,v_target.vehicle_id,v_target.id,v_event_type,p_occurred_at,p_meter_value,v_reason,p_notes,(select auth.uid()))
+    RETURNING id INTO v_event_id;
+    INSERT INTO public.tire_events (organization_id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,reason,notes,related_tire_event_id,created_by)
+    VALUES (v_occupied.organization_id,v_occupied.id,v_source_location.vehicle_id,v_source_location.position_id,v_related_event_type,p_occurred_at + interval '1 millisecond',null,
+      'Rodízio/troca de posição com pneu ' || v_tire.serial_number,p_notes,v_event_id,(select auth.uid()))
+    RETURNING id INTO v_related_event_id;
+    UPDATE public.tire_events SET related_tire_event_id = v_related_event_id WHERE id = v_event_id AND organization_id = v_tire.organization_id;
+    RETURN jsonb_build_object('success',true,'action','swap','tire_id',v_tire.id,'other_tire_id',v_occupied.id,'event_id',v_event_id,'related_event_id',v_related_event_id,'position_id',v_target.id);
+  ELSE
+    IF v_tire.status = 'in_stock' THEN v_event_type := 'mount'::public.tire_event_kind;
+    ELSE v_event_type := CASE WHEN v_source_location.vehicle_id = v_target.vehicle_id THEN 'rotation'::public.tire_event_kind ELSE 'transfer'::public.tire_event_kind END; END IF;
+    INSERT INTO public.tire_events (organization_id,tire_id,vehicle_id,position_id,event_type,occurred_at,meter_value,reason,notes,created_by)
+    VALUES (v_tire.organization_id,v_tire.id,v_target.vehicle_id,v_target.id,v_event_type,p_occurred_at,p_meter_value,v_reason,p_notes,(select auth.uid()))
+    RETURNING id INTO v_event_id;
+    IF v_tire.status = 'in_stock' THEN
+      UPDATE public.tires SET status = 'mounted', updated_at = now() WHERE id = v_tire.id AND organization_id = v_tire.organization_id;
+    END IF;
+    RETURN jsonb_build_object('success',true,'action',CASE WHEN v_event_type = 'mount' THEN 'mount' ELSE 'move' END,'tire_id',v_tire.id,'event_id',v_event_id,'position_id',v_target.id);
+  END IF;
+END;
 $function$;
-
+revoke all on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) FROM PUBLIC, anon;
+grant execute on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) TO authenticated;
 revoke all on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) from public, anon;
 grant execute on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) to authenticated;
