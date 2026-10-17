@@ -198,6 +198,4 @@ BEGIN
 END;
 $function$;
 revoke all on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) FROM PUBLIC, anon;
-grant execute on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) TO authenticated;
-revoke all on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) from public, anon;
 grant execute on function public.move_tire_to_position(uuid,uuid,numeric,timestamptz,text,text) to authenticated;
