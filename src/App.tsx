@@ -2,6 +2,7 @@ import { useState } from "react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { VehicleManager } from "./vehicles/VehicleManager";
 import { FuelManager } from "./fuel/FuelManager";
+import { MaintenanceManager } from "./maintenance/MaintenanceManager";
 import {
   Activity, AlertTriangle, ArrowUpRight, Bell,
   CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel, Gauge,
@@ -97,7 +98,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
           </div>
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
-          {activeModule === "dashboard" ? <Dashboard onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
+          {activeModule === "dashboard" ? <Dashboard onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
           <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>Fleetwise · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
         </div>
       </main>
