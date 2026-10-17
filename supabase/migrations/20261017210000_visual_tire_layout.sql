@@ -26,6 +26,43 @@ alter table public.vehicles
   add column if not exists tire_layout_template_id uuid
   references public.tire_layout_templates(id) on delete set null;
 
+create or replace function private.enforce_vehicle_layout_template_scope()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_template_org uuid;
+begin
+  if new.tire_layout_template_id is null then
+    return new;
+  end if;
+
+  select t.organization_id into v_template_org
+  from public.tire_layout_templates t
+  where t.id = new.tire_layout_template_id;
+
+  if not found then
+    raise exception 'Esquema de pneus não encontrado.' using errcode = '23503';
+  end if;
+
+  if v_template_org is not null and v_template_org <> new.organization_id then
+    raise exception 'O esquema de pneus pertence a outra organização.' using errcode = '23503';
+  end if;
+
+  return new;
+end;
+$function$;
+
+drop trigger if exists vehicles_layout_template_scope on public.vehicles;
+create trigger vehicles_layout_template_scope
+before insert or update of tire_layout_template_id, organization_id
+on public.vehicles
+for each row execute function private.enforce_vehicle_layout_template_scope();
+
+revoke all on function private.enforce_vehicle_layout_template_scope() from public, anon, authenticated;
+
 alter table public.tire_layout_templates enable row level security;
 drop policy if exists tire_layout_templates_select_available on public.tire_layout_templates;
 create policy tire_layout_templates_select_available
