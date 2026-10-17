@@ -1,0 +1,106 @@
+.fleet-feature-shell{display:grid;gap:16px;min-width:0}
+.fleet-feature-toolbar{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.fleet-feature-toolbar h2{margin:0 0 5px;color:#1d2939;font-size:16px;font-weight:750}
+.fleet-feature-toolbar p{margin:0;color:#8792a2;font-size:11px;line-height:1.5}
+.fleet-toolbar-actions{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap}
+.fleet-inline-filter{display:grid;gap:5px;color:#6b7789;font-size:10px;font-weight:650}
+.fleet-inline-filter select,.fleet-period-form input{border:1px solid #dfe5ed;border-radius:8px;background:#fff;padding:9px 10px;color:#344258;font:inherit;min-width:132px}
+.fleet-loading{display:flex;align-items:center;gap:9px;padding:14px 16px;border:1px solid #e5ebf2;border-radius:9px;background:#fff;color:#728096;font-size:11px}
+.fleet-spin{animation:fleet-spin 1s linear infinite}
+@keyframes fleet-spin{to{transform:rotate(360deg)}}
+.fleet-kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}
+.fleet-kpi-card{min-width:0;background:#fff;border:1px solid #e8edf3;border-radius:11px;padding:16px;box-shadow:0 2px 5px #192b4205}
+.fleet-kpi-head{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#718096;font-size:10px;font-weight:600}
+.fleet-kpi-icon{width:34px;height:34px;display:grid;place-items:center;flex-shrink:0;border-radius:9px;background:#edf2ff;color:#5071d6}
+.fleet-kpi-icon.blue{background:#edf2ff;color:#5071d6}
+.fleet-kpi-icon.orange{background:#fff2e4;color:#c77a28}
+.fleet-kpi-icon.violet{background:#f2edff;color:#8b6ad7}
+.fleet-kpi-icon.teal{background:#e5f8f3;color:#31a58c}
+.fleet-kpi-value{display:block;margin:13px 0 10px;color:#243149;font-size:clamp(19px,2vw,27px);font-weight:750;letter-spacing:-.6px;overflow-wrap:anywhere}
+.fleet-kpi-card small{display:block;min-height:25px;border-top:1px solid #f0f2f6;padding-top:9px;color:#8a96a7;font-size:9px;line-height:1.45}
+.fleet-dashboard-grid,.fleet-report-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(300px,1fr);gap:16px;align-items:start}
+.fleet-panel{min-width:0;background:#fff;border:1px solid #e8edf3;border-radius:11px;padding:18px;box-shadow:0 2px 5px #192b4205}
+.fleet-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.fleet-panel-heading h3{margin:0;color:#243149;font-size:13px;font-weight:750}
+.fleet-panel-heading p{margin:5px 0 0;color:#8b96a7;font-size:10px;line-height:1.5}
+.fleet-period-chip,.fleet-record-count{padding:5px 8px;border:1px solid #e3e9f1;border-radius:7px;color:#728096;background:#fbfcfe;font-size:9px;white-space:nowrap}
+.fleet-attention-icon{color:#d39a35;flex-shrink:0}
+.fleet-cost-row{display:grid;gap:7px;margin:14px 0}
+.fleet-cost-label{display:flex;align-items:center;justify-content:space-between;gap:12px;color:#6f7c8f;font-size:10px}
+.fleet-cost-label strong{color:#344258;font-size:10px;white-space:nowrap}
+.fleet-bar-track{height:7px;border-radius:999px;overflow:hidden;background:#f0f3f7}
+.fleet-bar-fill{display:block;height:100%;min-width:0;border-radius:999px;transition:width .18s ease}
+.fleet-bar-fill.fuel,.fleet-month-segment.fuel,.fleet-chart-legend i.fuel{background:#4e72d9}
+.fleet-bar-fill.maintenance,.fleet-month-segment.maintenance,.fleet-chart-legend i.maintenance{background:#9775d7}
+.fleet-bar-fill.tire,.fleet-month-segment.tire,.fleet-chart-legend i.tire{background:#25a68a}
+.fleet-bar-fill.other,.fleet-month-segment.other,.fleet-chart-legend i.other{background:#d8a344}
+.fleet-section-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:17px;padding-top:13px;border-top:1px solid #eef1f5;color:#6d7a8d;font-size:10px}
+.fleet-section-footer strong{color:#26354c;font-size:14px}
+.fleet-empty-inline{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:125px;padding:22px 14px;text-align:center;color:#8995a7}
+.fleet-empty-inline svg{color:#92a1b5}
+.fleet-empty-inline strong{color:#526078;font-size:11px}
+.fleet-empty-inline span{max-width:440px;color:#909bad;font-size:10px;line-height:1.55}
+.fleet-alert-list{display:grid;gap:5px}
+.fleet-alert-item{display:flex;align-items:center;gap:10px;width:100%;padding:11px 3px;border:0;border-bottom:1px solid #f0f2f6;background:#fff;text-align:left}
+.fleet-alert-item:last-child{border-bottom:0}
+.fleet-alert-item:hover .fleet-alert-copy strong{color:#4169d9}
+.fleet-alert-icon{width:31px;height:31px;display:grid;place-items:center;flex-shrink:0;border-radius:8px}
+.fleet-alert-icon.amber{background:#fff4df;color:#c38a26}
+.fleet-alert-icon.blue{background:#edf2ff;color:#5071d6}
+.fleet-alert-icon.violet{background:#f2edff;color:#8b6ad7}
+.fleet-alert-icon.teal{background:#e5f8f3;color:#31a58c}
+.fleet-alert-copy{display:grid;gap:4px;min-width:0;flex:1}
+.fleet-alert-copy strong{color:#39485e;font-size:10px}
+.fleet-alert-copy small{color:#919cad;font-size:9px;line-height:1.4}
+.fleet-alert-item b{display:grid;place-items:center;min-width:26px;height:26px;padding:0 7px;border-radius:7px;background:#f4f6fa;color:#475569;font-size:11px}
+.fleet-clean-status{display:flex;align-items:center;gap:7px;margin-top:10px;padding:10px;border-radius:8px;background:#f1faf6;color:#397d65;font-size:10px}
+.fleet-recent-panel{padding-bottom:6px}
+.fleet-recent-list{display:grid}
+.fleet-recent-row{display:grid;grid-template-columns:32px minmax(0,1fr) auto auto;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid #f0f2f6}
+.fleet-recent-row:last-child{border-bottom:0}
+.fleet-recent-icon{width:30px;height:30px;display:grid;place-items:center;border-radius:8px;background:#edf2ff;color:#5071d6}
+.fleet-recent-icon.maintenance{background:#f2edff;color:#8b6ad7}
+.fleet-recent-icon.tire{background:#e5f8f3;color:#31a58c}
+.fleet-recent-icon.expense{background:#fff4df;color:#c38a26}
+.fleet-recent-copy{display:grid;gap:4px;min-width:0}
+.fleet-recent-copy strong{font-size:10px;color:#344258;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fleet-recent-copy small{font-size:9px;color:#919cad;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fleet-recent-date{font-size:9px;color:#8995a7;white-space:nowrap}
+.fleet-recent-amount{font-size:10px;color:#344258;white-space:nowrap}
+.fleet-quick-links{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px}
+.fleet-quick-links button{display:flex;align-items:center;gap:10px;min-width:0;padding:13px;background:#fff;border:1px solid #e8edf3;border-radius:10px;color:#4169d9;text-align:left}
+.fleet-quick-links button:hover{border-color:#bdcbef;background:#fbfcff}
+.fleet-quick-links button span{display:grid;gap:4px;flex:1;min-width:0}
+.fleet-quick-links button strong{font-size:10px;color:#334258}
+.fleet-quick-links button small{font-size:9px;color:#8b96a7}
+.fleet-quick-links button b{color:#8b96a7;font-size:14px}
+.fleet-period-form{display:flex;align-items:flex-end;gap:11px;flex-wrap:wrap}
+.fleet-period-title{display:flex;align-items:center;gap:8px;margin-right:auto;align-self:center;color:#334258;font-size:11px}
+.fleet-period-title svg{color:#617bdb}
+.fleet-period-form label{display:grid;gap:5px;color:#6b7789;font-size:10px;font-weight:650}
+.fleet-period-form input{font-size:11px;min-width:145px}
+.fleet-report-kpis{margin-top:1px}
+.fleet-chart-legend{display:flex;gap:12px;flex-wrap:wrap;margin:-3px 0 17px;color:#758196;font-size:9px}
+.fleet-chart-legend span{display:inline-flex;align-items:center;gap:5px}
+.fleet-chart-legend i{width:8px;height:8px;display:inline-block;border-radius:3px}
+.fleet-monthly-chart{display:grid;gap:15px}
+.fleet-month-row{display:grid;grid-template-columns:56px minmax(40px,1fr) minmax(88px,auto);align-items:center;gap:10px}
+.fleet-month-label{font-size:10px;color:#69778c;text-transform:capitalize}
+.fleet-month-bar-track{display:flex;height:14px;overflow:hidden;border-radius:5px;background:#f1f4f8}
+.fleet-month-segment{display:block;flex:0 0 auto;height:100%;min-width:0}
+.fleet-month-total{font-size:10px;color:#435168;text-align:right;white-space:nowrap}
+.fleet-vehicle-cost-panel{padding:0;overflow:hidden}
+.fleet-vehicle-cost-panel>.fleet-panel-heading{padding:18px 18px 0}
+.fleet-table-wrap{max-width:100%;overflow-x:auto}
+.fleet-table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:10px}
+.fleet-table th{padding:11px 13px;background:#f8fafc;border-top:1px solid #eef1f5;border-bottom:1px solid #e9edf3;text-align:right;color:#728096;font-size:9px;font-weight:700}
+.fleet-table th:first-child,.fleet-table td:first-child{text-align:left}
+.fleet-table td{padding:12px 13px;border-bottom:1px solid #f0f2f6;text-align:right;color:#5b687d}
+.fleet-table tbody tr:hover{background:#fbfcff}
+.fleet-table td strong{color:#2f3d53;font-weight:700}
+.fleet-table td small{display:block;margin-top:4px;color:#909bad;font-size:9px}
+.fleet-table tfoot th{background:#f2f5fa;color:#344258;font-size:10px}
+.fleet-footnote{margin:12px 16px 16px;color:#929cad;font-size:9px;line-height:1.55}
+@media(max-width:1120px){.fleet-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fleet-dashboard-grid,.fleet-report-grid{grid-template-columns:1fr}.fleet-quick-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){.fleet-feature-toolbar{align-items:stretch}.fleet-toolbar-actions{width:100%}.fleet-toolbar-actions>*{flex:1}.fleet-inline-filter select{width:100%}.fleet-kpi-grid{grid-template-columns:1fr 1fr;gap:8px}.fleet-kpi-card{padding:12px}.fleet-kpi-value{font-size:19px}.fleet-kpi-head{font-size:9px}.fleet-panel{padding:13px}.fleet-period-chip{display:none}.fleet-recent-row{grid-template-columns:30px minmax(0,1fr) auto;gap:8px}.fleet-recent-amount{grid-column:2;justify-self:start}.fleet-recent-date{grid-column:3;grid-row:1}.fleet-quick-links{grid-template-columns:1fr 1fr}.fleet-period-form{align-items:stretch}.fleet-period-title{width:100%;margin-bottom:4px}.fleet-period-form label{flex:1;min-width:130px}.fleet-period-form input{width:100%;min-width:0}.fleet-month-row{grid-template-columns:47px minmax(30px,1fr) minmax(78px,auto);gap:7px}.fleet-month-total{font-size:9px}.fleet-table{font-size:9px}}
+@media(max-width:390px){.fleet-kpi-grid,.fleet-quick-links{grid-template-columns:1fr}.fleet-toolbar-actions{align-items:stretch}.fleet-recent-copy strong{white-space:normal}}
