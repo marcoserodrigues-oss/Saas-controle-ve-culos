@@ -58,7 +58,6 @@ const fuelLabels: Record<string, string> = {
 export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
-  const pageHeight = 297;
   const margin = 7;
   const copyWidth = pageWidth - margin * 2;
   const copyHeight = 137;
