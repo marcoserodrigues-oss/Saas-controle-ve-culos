@@ -7,7 +7,7 @@ import {
   asNumber, buildCostBreakdown, dateDaysAgo, dateEndExclusiveIso, dateStartIso,
   formatBrlCents, formatNumber, fuelCostCents, localDateInput, loadFleetAnalytics,
   tireEventCostCents, workOrderCostCents,
-  type FleetAnalyticsData, type FleetTireEvent, type FleetWorkOrder
+  type FleetAnalyticsData
 } from "../lib/fleetAnalytics";
 import "../fleetAnalytics.css";
 
