@@ -1,4 +1,5 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CSSProperties, FormEvent } from "react";
 import { AlertCircle, CheckCircle2, Fuel, Pencil, Plus, RefreshCw, Search, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
 
@@ -57,7 +58,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     });
   },[rows,days,search,vehicleMap,driverMap,supplierMap]);
   const liters = visible.reduce((a,r)=>a+num(r.liters),0);
-  const cents = visible.reduce((a,r)=>a+num(r.total_cents ?? Math.round(num(r.liters)*num(r.unit_price_cents)),0),0);
+  const cents = visible.reduce((a,r)=>a+num(r.total_cents ?? Math.round(num(r.liters)*num(r.unit_price_cents))),0);
   const set = (key:keyof FormValues,value:string)=>setForm(old=>({...old,[key]:value}));
   const create = ()=>{setForm({...blank(),vehicle_id:vehicles.find(v=>v.status==="active")?.id??""});setEditing(null);setShowForm(true);setError("");setNotice("");};
   const edit = (r:EventRow)=>{setForm({vehicle_id:r.vehicle_id,driver_id:r.driver_id??"",supplier_id:r.supplier_id??"",occurred_at:new Date(r.occurred_at).toISOString().slice(0,16),meter_value:String(r.meter_value),liters:String(r.liters),unit_price:(r.unit_price_cents/100).toFixed(2),fueling_kind:r.fueling_kind,document_number:r.document_number??"",notes:r.notes??""});setEditing(r.id);setShowForm(true);setError("");setNotice("");};
@@ -95,7 +96,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     else {setNotice("Registro cancelado; histórico preservado.");await load();}
   };
 
-  const field: React.CSSProperties={display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"#475569"};
+  const field: CSSProperties={display:"flex",flexDirection:"column",gap:6,fontSize:12,color:"#475569"};
   const input: React.CSSProperties={border:"1px solid #dbe2ec",borderRadius:7,padding:"10px",background:"#fff",color:"#172338",minWidth:0,width:"100%"};
   const button: React.CSSProperties={border:0,borderRadius:7,padding:"10px 13px",background:"#4169df",color:"#fff",fontWeight:600,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:7};
   const mutedButton: React.CSSProperties={...button,background:"#f1f5f9",color:"#334155",border:"1px solid #e2e8f0"};
