@@ -1,7 +1,7 @@
 # STATUS DO PROJETO
 
 **Atualizado em:** 2026-10-17  
-**Fase atual:** Etapa 2 — Fundação do banco e preparação de deploy  
+**Fase atual:** Etapa 2 — Fundação, schema Supabase e autenticação inicial  
 **Status geral:** Em implementação; não homologado para produção.
 
 ## Implementado nesta fundação
@@ -18,7 +18,8 @@
 - [x] Cliente Supabase preparado para receber variáveis públicas de ambiente.
 - [x] Migração inicial PostgreSQL/Supabase versionada com tabelas de base e RLS.
 - [ ] Projeto Supabase real conectado e migração aplicada.
-- [ ] Fluxo de autenticação e provisionamento seguro de organização/owner.
+- [x] Login por e-mail/senha Supabase e validação de vínculo ativo com organização.
+- [ ] Provisionamento seguro de organização/owner e fluxo de recuperação de senha.
 - [ ] Migrações do banco executadas.
 - [ ] Cadastro CRUD conectado a banco (não implementado).
 - [ ] Abastecimentos e autorizações persistidos.
@@ -85,6 +86,13 @@ Concluir a fundação executável (Vite, React, TypeScript, testes, CI e documen
 - [ ] Criar/vincular projeto Supabase do proprietário e aplicar migração.
 - [ ] Configurar variáveis Vercel e publicar frontend.
 - [ ] Executar testes de isolamento RLS e provisionamento de owner.
-- [ ] CI verde confirmado após a última alteração.
+- [x] CI verde confirmado para typecheck, testes unitários e build de produção (commit a155fd6).
 
 **Nota de segurança:** o schema inicial não permite ao usuário comum criar organizações ou memberships. O fluxo de provisionamento privilegiado ainda precisa ser implementado antes de liberar o cadastro de usuários.
+
+
+## Validação mais recente
+- GitHub Actions no commit `a155fd6`: typecheck aprovado, testes unitários aprovados e build de produção aprovado.
+- A migração SQL está apenas versionada no GitHub. Não foi aplicada nem testada contra uma instância real do PostgreSQL/Supabase.
+- Login é habilitado apenas quando as duas variáveis públicas Supabase estão configuradas. Sem configuração, a interface mostra aviso de conexão pendente.
+- Vercel ainda não foi conectada nem implantada a partir desta sessão; depende da conta/projeto e variáveis do proprietário.
