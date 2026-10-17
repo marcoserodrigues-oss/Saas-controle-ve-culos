@@ -1,7 +1,7 @@
 # STATUS DO PROJETO
 
 **Atualizado em:** 2026-10-17  
-**Fase atual:** Etapa 1 — Fundação  
+**Fase atual:** Etapa 2 — Fundação do banco e preparação de deploy  
 **Status geral:** Em implementação; não homologado para produção.
 
 ## Implementado nesta fundação
@@ -15,10 +15,12 @@
 - [ ] Execução verde da CI — correção aplicada após falha inicial de configuração do cache; nova execução aguardando resultado.
 
 ## Não implementado / não validado
-- [ ] Persistência PostgreSQL/Supabase conectada.
-- [ ] Autenticação e autorização reais.
+- [x] Cliente Supabase preparado para receber variáveis públicas de ambiente.
+- [x] Migração inicial PostgreSQL/Supabase versionada com tabelas de base e RLS.
+- [ ] Projeto Supabase real conectado e migração aplicada.
+- [ ] Fluxo de autenticação e provisionamento seguro de organização/owner.
 - [ ] Migrações do banco executadas.
-- [ ] Cadastro CRUD conectado a banco.
+- [ ] Cadastro CRUD conectado a banco (não implementado).
 - [ ] Abastecimentos e autorizações persistidos.
 - [ ] Auditoria de alterações em backend.
 - [ ] Controle completo de manutenção.
@@ -73,3 +75,16 @@
 
 ## Próxima ação
 Concluir a fundação executável (Vite, React, TypeScript, testes, CI e documentação de arquitetura). Depois implementar o domínio e o backend por etapas. Não marcar item como concluído sem executar e registrar a verificação correspondente.
+
+
+## Supabase e Vercel — configuração pendente
+- [x] Dependência @supabase/supabase-js e cliente condicional criados.
+- [x] Variáveis documentadas em .env.example.
+- [x] Schema inicial versionado com isolamento por organização e RLS.
+- [x] Checklist de deploy criado em docs/DEPLOY_VERCEL_SUPABASE.md.
+- [ ] Criar/vincular projeto Supabase do proprietário e aplicar migração.
+- [ ] Configurar variáveis Vercel e publicar frontend.
+- [ ] Executar testes de isolamento RLS e provisionamento de owner.
+- [ ] CI verde confirmado após a última alteração.
+
+**Nota de segurança:** o schema inicial não permite ao usuário comum criar organizações ou memberships. O fluxo de provisionamento privilegiado ainda precisa ser implementado antes de liberar o cadastro de usuários.
