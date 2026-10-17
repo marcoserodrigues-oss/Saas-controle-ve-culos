@@ -83,6 +83,27 @@ export function validateAuthorizationDraft(
   };
 }
 
+export function isAuthorizationPendingSettlement(
+  status: string,
+  consumedLiters: number | string | null | undefined
+): boolean {
+  const consumed = Number(consumedLiters ?? 0);
+  return status === "active" && Number.isFinite(consumed) && consumed <= 0;
+}
+
+export function authorizationWorkflowStatus(
+  status: string,
+  validFrom: string,
+  validUntil: string,
+  consumedLiters: number | string | null | undefined,
+  now = new Date()
+): { label: string; key: "active" | "inactive" | "cancelled" | "scheduled" | "expired" | "settled" } {
+  if (status === "active" && Number(consumedLiters ?? 0) > 0) {
+    return { label: "Concluída", key: "settled" };
+  }
+  return authorizationDisplayStatus(status, validFrom, validUntil, now);
+}
+
 export function authorizationConsumptionExceedsLimit(
   consumedLiters: number | string | null,
   consumedAmountCents: number | string | null,
