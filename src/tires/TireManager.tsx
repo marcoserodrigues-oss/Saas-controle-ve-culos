@@ -333,7 +333,12 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   }
   function openEventForm(tireId = "") {
     setLayoutMoveTarget(null);
-    const next = {...emptyEvent(),tire_id:tireId};
+    const selected = tireId ? tireMap.get(tireId) : undefined;
+    const defaultType: EventType = selected?.status === "mounted" ? "rotation"
+      : selected?.status === "retread" ? "retread_returned"
+      : selected?.status === "repair" ? "adjustment"
+      : "mount";
+    const next = {...emptyEvent(),tire_id:tireId,event_type:defaultType,target_status:"in_stock" as TireStatus};
     const placement = tireId ? latestPlacement.get(tireId) : undefined;
     if (placement) { next.vehicle_id = placement.vehicle_id ?? ""; next.position_id = placement.position_id ?? ""; }
     setEventForm(next); setShowEventForm(true); setError(""); setNotice("");
@@ -469,6 +474,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (nextStatus === "scrapped" && oldStatus !== "scrapped" && !window.confirm("Confirmar ajuste para descartado? O histórico será preservado.")) return;
     }
 
+    if (placementEvent(kind) && isMounted && vehiclePlacement?.position_id === positionId && !layoutMoveTarget) { setError("O pneu já está nesta posição. Escolha outra posição para registrar o rodízio ou transferência."); return; }
+
     if (placementEvent(kind) || (kind === "adjustment" && nextStatus === "mounted")) {
       const targetPosition = activePositions.find(p => p.id === positionId && p.vehicle_id === vehicleId);
       if (!targetPosition) { setError("A posição selecionada não está ativa ou não pertence ao veículo escolhido."); return; }
@@ -576,7 +583,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const currentTire = eventForm.tire_id ? tireMap.get(eventForm.tire_id) : null;
   const currentLocation = currentTire ? latestPlacement.get(currentTire.id) : undefined;
   const needsVehiclePosition = ["mount","rotation","transfer"].includes(eventForm.event_type) || (eventForm.event_type === "adjustment" && eventForm.target_status === "mounted");
-  const availableEventPositions = activePositions.filter(p => p.vehicle_id === eventForm.vehicle_id && (!mountedTiresAtPosition.has(p.id) || mountedTiresAtPosition.get(p.id) === eventForm.tire_id));
+  const availableEventPositions = activePositions.filter(p => p.vehicle_id === eventForm.vehicle_id && (!mountedTiresAtPosition.has(p.id) || mountedTiresAtPosition.get(p.id) === eventForm.tire_id || (layoutMoveTarget !== null && p.id === layoutMoveTarget)));
   const visiblePositions = positions.filter(p => !search || [p.position_code,p.position_label,vehicleMap.get(p.vehicle_id)?.description ?? ""].some(x => x.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))));
   const layoutVehiclePositions = layoutVehicle ? positions.filter(p => p.vehicle_id === layoutVehicle.id) : [];
   const layoutPositionByCode = new Map(layoutVehiclePositions.map(p => [p.position_code.toLocaleLowerCase("pt-BR"),p]));
