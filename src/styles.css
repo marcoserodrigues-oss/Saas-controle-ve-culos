@@ -111,6 +111,8 @@
 .tire-diagram-body span:nth-child(3) { bottom: 4%; height: 13%; border-radius: 5px 5px 12px 12px; }
 .tire-diagram-tractor .tire-diagram-body { left: 39%; width: 22%; top: 9%; bottom: 13%; border-radius: 34px 34px 23px 23px; }
 .tire-diagram-truck .tire-diagram-body { left: 39%; width: 22%; top: 13%; bottom: 15%; }
+.tire-diagram-car .tire-diagram-body { left: 41%; width: 18%; top: 15%; bottom: 17%; border-radius: 38px 38px 20px 20px; }
+.tire-diagram-pickup .tire-diagram-body { left: 39%; width: 22%; top: 12%; bottom: 15%; border-radius: 23px 23px 11px 11px; }
 .tire-diagram-trailer .tire-diagram-body { left: 31%; width: 38%; top: 18%; bottom: 18%; border-radius: 10px; background: #f0f3f7; }
 .tire-diagram-trailer .tire-diagram-body span:nth-child(1) { top: 0; height: 11%; left: 12%; right: 12%; background: #e1e7ef; }
 .tire-diagram-trailer .tire-diagram-body span:nth-child(2) { top: 36%; height: 28%; }
