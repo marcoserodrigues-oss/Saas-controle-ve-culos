@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CSSProperties, FormEvent } from "react";
 import { AlertCircle, CheckCircle2, ClipboardList, Pencil, Plus, RefreshCw, Wrench, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { nextSequentialCode } from "../lib/automaticCode";
 
 type Vehicle = { id:string; code:string; plate:string|null; description:string; meter_kind:string; status:string };
 type Supplier = { id:string; name:string; status:string };
@@ -11,6 +12,20 @@ type OF = { vehicle_id:string; supplier_id:string; category:string; description:
 type PF = { vehicle_id:string; title:string; interval_km:string; interval_hours:string; interval_days:string; last_done_at:string; last_done_meter:string };
 const blankO=():OF=>({vehicle_id:"",supplier_id:"",category:"preventive",description:"",opened_at:new Date().toISOString().slice(0,16),meter_at_open:"",meter_at_close:"",labor:"0",parts:"0",status:"open"});
 const blankP=():PF=>({vehicle_id:"",title:"",interval_km:"",interval_hours:"",interval_days:"",last_done_at:"",last_done_meter:""});
+
+async function generateWorkOrderNumber(organizationId: string) {
+ if(!supabase) throw new Error("Banco de dados não configurado.");
+ const values:string[]=[];
+ for(let from=0;;from+=1000){
+  const {data,error}=await supabase.from("work_orders").select("order_number").eq("organization_id",organizationId).order("order_number").range(from,from+999);
+  if(error) throw error;
+  const batch=(data??[]) as {order_number:string}[];
+  values.push(...batch.map(row=>row.order_number));
+  if(batch.length<1000) break;
+ }
+ return nextSequentialCode(values,"OS");
+}
+
 const money=(n:number)=>new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"}).format(n/100);
 const date=(s:string|null)=>s?new Intl.DateTimeFormat("pt-BR",{dateStyle:"short"}).format(new Date(s)):"—";
 const statusNames:Record<string,string>={open:"Aberta",in_progress:"Em andamento",waiting_parts:"Aguardando peças",closed:"Concluída",cancelled:"Cancelada"};
@@ -50,8 +65,25 @@ export function MaintenanceManager({organizationId}:{organizationId:string}) {
   if(of.supplier_id&&!sm.has(of.supplier_id)){setError("Fornecedor inválido.");return}
   setSaving(true);setError("");setNotice("");
   const payload:any={organization_id:organizationId,vehicle_id:of.vehicle_id,supplier_id:of.supplier_id||null,category:of.category,description:of.description.trim(),opened_at:opened.toISOString(),closed_at:of.status==="closed"?(editO?orders.find(o=>o.id===editO)?.closed_at??new Date().toISOString():new Date().toISOString()):null,meter_at_open:mo,meter_at_close:of.status==="closed"?mc:null,labor_cost_cents:labor,parts_cost_cents:parts,status:of.status};
-  const result=editO?await supabase.from("work_orders").update(payload).eq("id",editO).eq("organization_id",organizationId).select("id").maybeSingle():await supabase.from("work_orders").insert({...payload,order_number:"OS-"+Date.now().toString(36).toUpperCase()}).select("id").maybeSingle();
-  if(result.error||!result.data)setError("Não foi possível salvar a ordem. Nenhuma gravação foi confirmada.");
+  let saved=false;
+  let saveMessage="";
+  let codeGenerationFailed=false;
+  if(editO){
+   const result=await supabase.from("work_orders").update(payload).eq("id",editO).eq("organization_id",organizationId).select("id").maybeSingle();
+   if(result.error||!result.data)saveMessage="Não foi possível salvar a ordem. Nenhuma gravação foi confirmada.";
+   else saved=true;
+  }else{
+   for(let attempt=0;attempt<5;attempt++){
+    let orderNumber="";
+    try{orderNumber=await generateWorkOrderNumber(organizationId)}catch{codeGenerationFailed=true;break}
+    const result=await supabase.from("work_orders").insert({...payload,order_number:orderNumber}).select("id").maybeSingle();
+    if(result.error&&result.error.code==="23505"&&result.error.message.includes("work_orders_organization_id_order_number_key"))continue;
+    if(result.error||!result.data)saveMessage="Não foi possível salvar a ordem. Nenhuma gravação foi confirmada.";
+    else saved=true;
+    break;
+   }
+  }
+  if(!saved)setError(codeGenerationFailed?"Não foi possível gerar o número da OS. Confira a conexão e tente novamente.":saveMessage||"Não foi possível reservar um número de OS único após várias tentativas. Tente novamente.");
   else{setNotice(editO?"Ordem atualizada.":"Ordem de serviço criada.");setShowO(false);await load()}setSaving(false);
  }
  async function savePlan(e:FormEvent){e.preventDefault();if(!supabase||saving)return;
