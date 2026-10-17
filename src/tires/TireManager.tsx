@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, RotateCw, History, Settings2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { nextSequentialCode } from "../lib/automaticCode";
 
 type TireStatus = "in_stock" | "mounted" | "retread" | "repair" | "scrapped" | "sold";
 type EventType = "purchase" | "mount" | "dismount" | "rotation" | "transfer" | "retread_sent" | "retread_returned" | "repair" | "inspection" | "scrap" | "adjustment";
@@ -24,6 +25,42 @@ const dateLabel = (value: string | null) => value ? new Intl.DateTimeFormat("pt-
 const datetimeLabel = (value: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 const toCents = (value: string) => Math.round((Number(value.replace(",", ".")) || 0) * 100);
 const placementEvent = (type: EventType) => ["mount","rotation","transfer"].includes(type);
+
+async function generateTireCode(organizationId: string) {
+  if (!supabase) throw new Error("Banco de dados não configurado.");
+  const codes: string[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from("tires")
+      .select("serial_number")
+      .eq("organization_id", organizationId)
+      .order("serial_number")
+      .range(from, from + 999);
+    if (error) throw error;
+    const batch = (data ?? []) as { serial_number: string }[];
+    codes.push(...batch.map(row => row.serial_number));
+    if (batch.length < 1000) break;
+  }
+  return nextSequentialCode(codes, "PNE");
+}
+
+async function generatePositionCode(organizationId: string, vehicleId: string) {
+  if (!supabase) throw new Error("Banco de dados não configurado.");
+  const codes: string[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from("vehicle_tire_positions")
+      .select("position_code")
+      .eq("organization_id", organizationId)
+      .eq("vehicle_id", vehicleId)
+      .order("position_code")
+      .range(from, from + 999);
+    if (error) throw error;
+    const batch = (data ?? []) as { position_code: string }[];
+    codes.push(...batch.map(row => row.position_code));
+    if (batch.length < 1000) break;
+  }
+  return nextSequentialCode(codes, "POS");
+}
+
 
 export function TireManager({ organizationId }: { organizationId: string }) {
   const [tires, setTires] = useState<Tire[]>([]);
@@ -179,31 +216,65 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   async function saveTire(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || saving) return;
-    const serial = tireForm.serial_number.trim();
+    const requestedSerial = tireForm.serial_number.trim();
+    const editingRecord = editingTireId ? tires.find(t => t.id === editingTireId) : undefined;
+    const autoGenerate = !editingTireId && !requestedSerial;
+    let serial = requestedSerial || editingRecord?.serial_number || "";
     const size = tireForm.size.trim();
     const price = toCents(tireForm.purchase_cost);
-    if (serial.length < 2 || size.length < 2) { setError("Informe o número de série e a medida do pneu."); return; }
+    if ((!autoGenerate && serial.length < 2) || size.length < 2) { setError("Informe a medida do pneu e seu número de série, ou deixe a identificação em branco para gerar um código interno."); return; }
     if (price < 0 || !Number.isFinite(price)) { setError("O custo de aquisição não pode ser negativo."); return; }
-    if (tires.some(t => t.id !== editingTireId && t.serial_number.trim().toLocaleLowerCase("pt-BR") === serial.toLocaleLowerCase("pt-BR"))) { setError("Já existe um pneu com este número de série."); return; }
+    if (serial && tires.some(t => t.id !== editingTireId && t.serial_number.trim().toLocaleLowerCase("pt-BR") === serial.toLocaleLowerCase("pt-BR"))) { setError("Já existe um pneu com este número de série/identificação."); return; }
+
     setSaving(true); setError(""); setNotice("");
-    const payload = { organization_id:organizationId,serial_number:serial,brand:tireForm.brand.trim() || null,model:tireForm.model.trim() || null,size,purchase_date:tireForm.purchase_date || null,purchase_cost_cents:price };
-    const result = editingTireId
-      ? await supabase.from("tires").update(payload).eq("id",editingTireId).eq("organization_id",organizationId).select("id").maybeSingle()
-      : await supabase.from("tires").insert({...payload,status:"in_stock"}).select("id").maybeSingle();
-    if (result.error || !result.data) {
-      setError(result.error?.code === "23505" ? "Número de série já cadastrado nesta organização." : "Não foi possível salvar o pneu. Confira os campos e permissões.");
+    const payloadBase = { organization_id:organizationId,brand:tireForm.brand.trim() || null,model:tireForm.model.trim() || null,size,purchase_date:tireForm.purchase_date || null,purchase_cost_cents:price };
+    let saveError: {code?:string;message?:string}|null = null;
+    let savedId: string | null = null;
+    let generationFailed = false;
+
+    if (editingTireId) {
+      const result = await supabase.from("tires").update({...payloadBase,serial_number:serial}).eq("id",editingTireId).eq("organization_id",organizationId).select("id").maybeSingle();
+      saveError = result.error;
+      savedId = result.data?.id ?? null;
+    } else {
+      for (let attempt = 0; attempt < (autoGenerate ? 5 : 1); attempt++) {
+        if (!serial) {
+          try { serial = await generateTireCode(organizationId); }
+          catch { generationFailed = true; break; }
+        }
+        const result = await supabase.from("tires").insert({...payloadBase,serial_number:serial,status:"in_stock"}).select("id").maybeSingle();
+        if (result.error && autoGenerate && result.error.code === "23505" && result.error.message.includes("tires_organization_id_serial_number_key")) {
+          saveError = result.error;
+          serial = "";
+          continue;
+        }
+        saveError = result.error;
+        savedId = result.data?.id ?? null;
+        break;
+      }
+    }
+
+    if (generationFailed) {
+      setError("Não foi possível gerar a identificação automaticamente. Verifique a conexão e tente novamente.");
+      setSaving(false);
+      return;
+    }
+    if (saveError || !savedId) {
+      setError(autoGenerate && !saveError
+        ? "Não foi possível reservar uma identificação única após várias tentativas. Tente novamente."
+        : saveError?.code === "23505" ? "Número de série/identificação já cadastrado nesta organização." : "Não foi possível salvar o pneu. Confira os campos e permissões.");
     } else if (!editingTireId) {
       const boughtAt = tireForm.purchase_date ? new Date(tireForm.purchase_date + "T12:00:00").toISOString() : new Date().toISOString();
-      const initialEvent = await supabase.from("tire_events").insert({organization_id:organizationId,tire_id:result.data.id,event_type:"purchase",occurred_at:boughtAt,cost_cents:price,reason:"Cadastro inicial do pneu",notes:"Evento gerado pelo cadastro do inventário."}).select("id").maybeSingle();
+      const initialEvent = await supabase.from("tire_events").insert({organization_id:organizationId,tire_id:savedId,event_type:"purchase",occurred_at:boughtAt,cost_cents:price,reason:"Cadastro inicial do pneu",notes:"Evento gerado pelo cadastro do inventário."}).select("id").maybeSingle();
       setShowTireForm(false);
       if (initialEvent.error || !initialEvent.data) setError("Pneu cadastrado, mas o evento inicial de compra não foi registrado. O item permanece em estoque; confira as permissões antes de tentar novamente.");
-      else setNotice("Pneu cadastrado no inventário e histórico.");
+      else setNotice(autoGenerate ? "Pneu cadastrado com código interno " + serial + "." : "Pneu cadastrado no inventário e histórico.");
       await load();
     } else {
       setShowTireForm(false); setNotice("Dados do pneu atualizados."); await load();
     }
     setSaving(false);
-  }
+  };
 
   function setEventType(type: EventType) {
     setEventForm(f => ({...f,event_type:type}));
@@ -384,7 +455,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
 
     {showTireForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-form-title"><div className="vehicle-form-heading"><div><h3 id="tire-form-title">{editingTireId ? "Editar pneu" : "Cadastrar pneu"}</h3><p>O número de série identifica o pneu individualmente.</p></div><button className="icon-button" onClick={() => setShowTireForm(false)} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveTire}><div className="vehicle-fields">
-        <label>Número de série / identificação<input required minLength={2} maxLength={100} value={tireForm.serial_number} onChange={e=>setTireForm(f=>({...f,serial_number:e.target.value}))}/></label>
+        <label>Número de série / identificação<input minLength={2} maxLength={100} value={tireForm.serial_number} onChange={e=>setTireForm(f=>({...f,serial_number:e.target.value}))} placeholder="Opcional · deixe em branco para gerar PNE-0001"/></label>
         <label>Medida do pneu<input required minLength={2} maxLength={60} placeholder="Ex.: 295/80 R22.5" value={tireForm.size} onChange={e=>setTireForm(f=>({...f,size:e.target.value}))}/></label>
         <label>Marca<input maxLength={80} value={tireForm.brand} onChange={e=>setTireForm(f=>({...f,brand:e.target.value}))}/></label>
         <label>Modelo / linha<input maxLength={80} value={tireForm.model} onChange={e=>setTireForm(f=>({...f,model:e.target.value}))}/></label>
