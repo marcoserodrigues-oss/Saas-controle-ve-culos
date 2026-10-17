@@ -160,6 +160,7 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
       }
       saveError = result.error;
       saved = Boolean(result.data);
+      savedId = result.data?.id ?? null;
       break;
     }
 
