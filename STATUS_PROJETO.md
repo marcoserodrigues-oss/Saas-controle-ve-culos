@@ -8,7 +8,11 @@
 - [x] Repositório inicializado com documentação.
 - [x] Estrutura planejada para React + TypeScript + Vite.
 - [x] Política explícita contra dados operacionais fictícios.
-- [ ] App React/TypeScript compilável, testes e CI — em andamento.
+- [x] App React/TypeScript com dashboard responsivo e navegação inicial.
+- [x] Regras puras para intervalos de hodômetro/horímetro, consumo e custo de pneus.
+- [x] Testes unitários para os cálculos de aceite definidos no prompt.
+- [x] Workflow CI criado para typecheck, testes e build.
+- [ ] Execução verde da CI — correção aplicada após falha inicial de configuração do cache; nova execução aguardando resultado.
 
 ## Não implementado / não validado
 - [ ] Persistência PostgreSQL/Supabase conectada.
@@ -65,7 +69,7 @@
 | Data | Verificação | Resultado |
 |---|---|---|
 | 2026-10-17 | Inspeção da API do GitHub | Repositório confirmado vazio antes da inicialização |
-| 2026-10-17 | Testes/build | Ainda não executados neste ambiente; não declarar sucesso |
+| 2026-10-17 | CI inicial | Falhou antes da instalação de dependências na configuração de cache npm sem lockfile; workflow corrigido e nova execução enfileirada |
 
 ## Próxima ação
 Concluir a fundação executável (Vite, React, TypeScript, testes, CI e documentação de arquitetura). Depois implementar o domínio e o backend por etapas. Não marcar item como concluído sem executar e registrar a verificação correspondente.
