@@ -168,7 +168,7 @@ export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPD
 
   doc.setDrawColor(203, 213, 225);
   doc.setFillColor(248, 250, 252);
-  doc.roundedRect(margin, y, contentWidth, 23, 2, 2, "FD");
+  doc.roundedRect(margin, y, contentWidth, 21, 2, 2, "FD");
   doc.setTextColor(51, 65, 85);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
@@ -179,7 +179,7 @@ export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPD
     ? "Documento valido somente para o ativo, condutor, fornecedor (quando indicado), limites e periodo descritos acima. O abastecimento realizado deve ser comprovado e registrado no sistema. Este documento nao substitui nota fiscal ou cupom fiscal."
     : "ATENCAO: esta autorizacao nao esta atualmente valida (" + currentStatus.label.toLocaleUpperCase("pt-BR") + "). Nao utilizar para novos abastecimentos. O documento foi mantido para fins de historico.";
   doc.text(doc.splitTextToSize(conditions, contentWidth - 8).slice(0, 3), margin + 4, y + 11);
-  y += 34;
+  y += 30;
 
   doc.setDrawColor(148, 163, 184);
   doc.setLineWidth(0.3);
@@ -193,10 +193,10 @@ export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPD
 
   doc.setFontSize(7);
   doc.setTextColor(100, 116, 139);
-  doc.text("Documento gerado eletronicamente pelo Fleetwise.", margin, 286);
-  doc.text("Autorizacao: " + auth.authorization_code, pageWidth - margin, 286, { align: "right" });
+  doc.text("Documento gerado eletronicamente pelo Fleetwise.", margin, 293);
+  doc.text("Autorizacao: " + auth.authorization_code, pageWidth - margin, 293, { align: "right" });
   doc.setDrawColor(226, 232, 240);
-  doc.line(margin, 289, pageWidth - margin, 289);
+  doc.line(margin, 295, pageWidth - margin, 295);
   return doc;
 }
 
