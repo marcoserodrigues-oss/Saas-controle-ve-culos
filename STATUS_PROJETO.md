@@ -21,7 +21,8 @@
 - [x] Login por e-mail/senha Supabase e validação de vínculo ativo com organização.
 - [ ] Provisionamento seguro de organização/owner e fluxo de recuperação de senha.
 - [ ] Migrações do banco executadas.
-- [ ] Cadastro CRUD conectado a banco (não implementado).
+- [x] Cadastro inicial de veículos/equipamentos com consulta, pesquisa e criação conectadas ao Supabase.
+- [ ] Editar/inativar ativos com trilha de auditoria e validação transacional.
 - [ ] Abastecimentos e autorizações persistidos.
 - [ ] Auditoria de alterações em backend.
 - [ ] Controle completo de manutenção.
@@ -96,3 +97,11 @@ Concluir a fundação executável (Vite, React, TypeScript, testes, CI e documen
 - A migração SQL está apenas versionada no GitHub. Não foi aplicada nem testada contra uma instância real do PostgreSQL/Supabase.
 - Login é habilitado apenas quando as duas variáveis públicas Supabase estão configuradas. Sem configuração, a interface mostra aviso de conexão pendente.
 - Vercel ainda não foi conectada nem implantada a partir desta sessão; depende da conta/projeto e variáveis do proprietário.
+
+
+## Primeiro CRUD conectado
+- [x] Login por e-mail/senha Supabase e bloqueio de contas sem vínculo ativo com organização.
+- [x] Seleção de organização quando a conta tem múltiplos vínculos.
+- [x] Cadastro e listagem de veículos/equipamentos com filtro local, validação básica e tratamento de erros.
+- [ ] Validar o fluxo contra um projeto Supabase real (migração, Auth, RLS e duplicidade) antes de considerar homologado.
+- [ ] Implementar edição/inativação auditável e CRUD dos cadastros auxiliares.
