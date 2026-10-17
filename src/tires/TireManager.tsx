@@ -133,7 +133,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
             segmentVehicle = null;
             segmentMeter = null;
           }
-        } else if (event.event_type === "adjustment" && event.reason?.startsWith("Ajuste para Em estoque")) {
+        } else if (event.event_type === "adjustment" && event.reason?.startsWith("Ajuste para ") && !event.reason.startsWith("Ajuste para Montado")) {
           if (cycleStart) {
             if (segmentVehicle && segmentVehicle === event.vehicle_id && segmentMeter !== null && event.meter_value !== null && Number(event.meter_value) >= segmentMeter) km += Number(event.meter_value)-segmentMeter;
             cycles += 1;
