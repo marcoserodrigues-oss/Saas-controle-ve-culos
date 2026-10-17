@@ -83,6 +83,23 @@ export function validateAuthorizationDraft(
   };
 }
 
+export function authorizationConsumptionExceedsLimit(
+  consumedLiters: number | string | null,
+  consumedAmountCents: number | string | null,
+  maxLiters: number | string | null,
+  maxAmountCents: number | string | null
+): boolean {
+  const litersUsed = Number(consumedLiters ?? 0);
+  const amountUsed = Number(consumedAmountCents ?? 0);
+  const hasLitersLimit = maxLiters !== null && maxLiters !== "";
+  const hasAmountLimit = maxAmountCents !== null && maxAmountCents !== "";
+
+  return (
+    (hasLitersLimit && Number.isFinite(litersUsed) && litersUsed > Number(maxLiters)) ||
+    (hasAmountLimit && Number.isFinite(amountUsed) && amountUsed > Number(maxAmountCents))
+  );
+}
+
 export function nextAuthorizationCode(existingCodes: readonly (string | null | undefined)[]): string {
   return nextSequentialCode(existingCodes, "AUT", 4);
 }
