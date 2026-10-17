@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { isSupabaseConfigured } from "./lib/supabase";
+import { VehicleManager } from "./vehicles/VehicleManager";
 import {
   Activity, AlertTriangle, ArrowUpRight, Bell,
   CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel, Gauge,
@@ -35,7 +36,7 @@ function formatToday() {
   return new Intl.DateTimeFormat("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" }).format(new Date());
 }
 
-function App({ organizationName }: { organizationName?: string | null } = {}) {
+function App({ organizationId, organizationName }: { organizationId?: string | null; organizationName?: string | null } = {}) {
   const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -93,7 +94,7 @@ function App({ organizationName }: { organizationName?: string | null } = {}) {
           </div>
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
-          {activeModule === "dashboard" ? <Dashboard onNavigate={setActiveModule} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
+          {activeModule === "dashboard" ? <Dashboard onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
           <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>Fleetwise · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
         </div>
       </main>
