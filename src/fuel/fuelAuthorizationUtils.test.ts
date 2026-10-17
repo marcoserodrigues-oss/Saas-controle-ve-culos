@@ -12,8 +12,8 @@ describe("fuel authorization helpers", () => {
     expect(nextAuthorizationCode(["AUT-0001", "AUT-0008", "OTHER-0009"])).toBe("AUT-0009");
   });
 
-  it("requires at least one positive authorization limit", () => {
-    expect(parseAuthorizationLimits("", "")).toMatchObject({ error: expect.any(String) });
+  it("allows authorizations without mandatory volume or financial limits", () => {
+    expect(parseAuthorizationLimits("", "")).toMatchObject({ limits: { max_liters: null, max_amount_cents: null } });
     expect(parseAuthorizationLimits("0", "")).toMatchObject({ error: expect.any(String) });
     expect(parseAuthorizationLimits("150", "")).toMatchObject({ limits: { max_liters: 150, max_amount_cents: null } });
     expect(parseAuthorizationLimits("", "1250.50")).toMatchObject({ limits: { max_liters: null, max_amount_cents: 125050 } });
@@ -25,7 +25,7 @@ describe("fuel authorization helpers", () => {
     const draft = blankAuthorizationDraft(now);
     expect(validateAuthorizationDraft({ ...draft, max_liters: "200" }, now).error).toBeUndefined();
     expect(validateAuthorizationDraft({ ...draft, valid_until: draft.valid_from, max_liters: "200" }, now).error).toContain("posterior");
-    expect(validateAuthorizationDraft({ ...draft, max_liters: "" }, now).error).toContain("pelo menos um limite");
+    expect(validateAuthorizationDraft({ ...draft, max_liters: "", max_amount: "" }, now).error).toBeUndefined();
   });
 
   it("reports authorization as cancelled, scheduled, expired or valid", () => {

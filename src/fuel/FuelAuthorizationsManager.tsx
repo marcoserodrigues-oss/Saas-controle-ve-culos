@@ -343,7 +343,7 @@ export function FuelAuthorizationsManager({
 
     {showForm && <form onSubmit={createAuthorization} style={{ ...panelStyle, display: "grid", gap: 14, borderColor: "#bfdbfe" }}>
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-        <div><h3 style={{ margin: 0, color: "#172033", fontSize: 16 }}>Emitir nova autorização</h3><p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>O número AUT será criado automaticamente ao salvar.</p></div>
+        <div><h3 style={{ margin: 0, color: "#172033", fontSize: 16 }}>Emitir nova autorização</h3><p style={{ margin: "4px 0 0", fontSize: 12, color: "#64748b" }}>O número AUT será criado automaticamente ao salvar. Limites de litros e de valor são opcionais.</p></div>
         <button type="button" aria-label="Fechar formulário" onClick={() => { setShowForm(false); setFormError(""); }} style={{ border: 0, background: "transparent", cursor: "pointer", color: "#64748b" }}><X size={18}/></button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
@@ -354,6 +354,7 @@ export function FuelAuthorizationsManager({
         <label style={labelStyle}>Válida até *<input required type="datetime-local" min={draft.valid_from || undefined} value={draft.valid_until} onChange={event => setDraftField("valid_until", event.target.value)} style={fieldStyle}/></label>
         <label style={labelStyle}>Limite de litros (opcional)<input type="number" min="0.001" max="100000" step="0.001" value={draft.max_liters} onChange={event => setDraftField("max_liters", event.target.value)} placeholder="Ex.: 150" style={fieldStyle}/></label>
         <label style={labelStyle}>Limite financeiro (R$) (opcional)<input type="number" min="0.01" max="100000000" step="0.01" value={draft.max_amount} onChange={event => setDraftField("max_amount", event.target.value)} placeholder="Ex.: 900,00" style={fieldStyle}/></label>
+        <p style={{ gridColumn: "1 / -1", margin: 0, fontSize: 12, color: "#64748b", lineHeight: 1.5 }}>Os dados reais do abastecimento — data/hora, km ou horímetro, litros, preço por litro e valor total — serão preenchidos nas duas vias impressas pelo posto/condutor. A via de retorno será usada para lançar o abastecimento no sistema.</p>
       </div>
       {formError && <div role="alert" style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: 11, borderRadius: 9, background: "#fef2f2", color: "#991b1b", border: "1px solid #fecaca", fontSize: 13 }}><AlertCircle size={16}/><span>{formError}</span></div>}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" }}>

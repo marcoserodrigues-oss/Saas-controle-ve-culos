@@ -34,6 +34,17 @@ describe("fuel authorization PDF", () => {
     expect(output).toContain("AUTORIZACAO DE ABASTECIMENTO");
   });
 
+  it("prints two detachable copies and blank fields for returned fueling data", () => {
+    const output = createFuelAuthorizationPdf(sample).output();
+    expect(output).toContain("VIA DO POSTO");
+    expect(output).toContain("VIA DE RETORNO");
+    expect(output).toContain("ODOMETRO");
+    expect(output).toContain("LITROS");
+    expect(output).toContain("PRECO POR LITRO");
+    expect(output).toContain("VALOR TOTAL");
+    expect(output).toContain("RECORTAR");
+  });
+
   it("marks cancelled authorizations as not valid for use", () => {
     const pdf = createFuelAuthorizationPdf({
       ...sample,

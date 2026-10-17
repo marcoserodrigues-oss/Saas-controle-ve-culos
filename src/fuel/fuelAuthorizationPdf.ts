@@ -39,164 +39,202 @@ export type FuelAuthorizationPdfData = {
 const brl = (cents: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 const liters = (value: number | string | null) => {
-  if (value === null || value === "") return "Sem limite informado";
+  if (value === null || value === "") return "Sem limite";
   const parsed = Number(value);
   return Number.isFinite(parsed)
     ? new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 3 }).format(parsed) + " L"
-    : "Sem limite informado";
+    : "Sem limite";
 };
 const dateTime = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? "Não informado"
+    ? "Nao informado"
     : new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(date);
 };
 const fuelLabels: Record<string, string> = {
-  diesel: "Diesel", gasoline: "Gasolina", ethanol: "Etanol", gnv: "GNV", electric: "Elétrico", other: "Outro"
+  diesel: "Diesel", gasoline: "Gasolina", ethanol: "Etanol", gnv: "GNV", electric: "Eletrico", other: "Outro"
 };
 
 export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPDF {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
-  const margin = 17;
-  const contentWidth = pageWidth - margin * 2;
+  const margin = 7;
+  const copyWidth = pageWidth - margin * 2;
+  const copyHeight = 137;
   const auth = data.authorization;
-  const currentStatus = authorizationDisplayStatus(auth.status, auth.valid_from, auth.valid_until);
-  const isUsable = currentStatus.key === "active";
-  const statusColors: Record<string, [number, number, number]> = {
+  const state = authorizationDisplayStatus(auth.status, auth.valid_from, auth.valid_until);
+  const active = state.key === "active";
+  const stateColors: Record<string, [number, number, number]> = {
     active: [5, 120, 87],
     scheduled: [29, 78, 216],
     expired: [180, 83, 9],
     inactive: [100, 116, 139],
     cancelled: [185, 28, 28]
   };
-  const statusColor = statusColors[currentStatus.key] ?? [100, 116, 139];
+  const organization = data.organization;
+  const vehicle = data.vehicle;
+  const driver = data.driver;
+  const supplier = data.supplier;
+  const limitSummary = [
+    auth.max_liters === null || auth.max_liters === "" ? null : "Ate " + liters(auth.max_liters),
+    auth.max_amount_cents === null || auth.max_amount_cents === "" ? null : "Ate " + brl(Number(auth.max_amount_cents))
+  ].filter(Boolean).join(" / ") || "Sem limite pre-fixado de litros ou valor";
+  const issuedDate = dateTime(auth.created_at);
 
-  doc.setFillColor(20, 39, 74);
-  doc.rect(0, 0, pageWidth, 35, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(19);
-  doc.text("FLEETWISE", margin, 14);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.text("GESTAO INTELIGENTE DE FROTAS", margin, 20);
-  const org = data.organization;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text(doc.splitTextToSize(org?.legal_name || org?.name || "Organizacao", 105), pageWidth - margin, 12, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  if (org?.tax_id) doc.text("CNPJ/CPF: " + org.tax_id, pageWidth - margin, 22, { align: "right" });
+  const section = (
+    top: number,
+    copyLabel: string,
+    returnCopy: boolean
+  ) => {
+    const x = margin;
+    const w = copyWidth;
+    const right = x + w;
+    const labelColor: [number, number, number] = [100, 116, 139];
+    const valueColor: [number, number, number] = [30, 41, 59];
+    const colGap = 5;
+    const twoCol = (w - 8 - colGap) / 2;
+    const field = (label: string, value: string, fx: number, fy: number, fw: number) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5.7);
+      doc.setTextColor(...labelColor);
+      doc.text(label.toLocaleUpperCase("pt-BR"), fx, fy);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(...valueColor);
+      const lines = doc.splitTextToSize(value || "Nao informado", fw);
+      doc.text(lines.slice(0, 1), fx, fy + 4.1);
+    };
+    const blankField = (label: string, fx: number, fy: number, fw: number) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5.6);
+      doc.setTextColor(71, 85, 105);
+      doc.text(label.toLocaleUpperCase("pt-BR"), fx, fy);
+      doc.setDrawColor(100, 116, 139);
+      doc.setLineWidth(0.25);
+      doc.line(fx, fy + 8.8, fx + fw, fy + 8.8);
+    };
 
-  doc.setTextColor(20, 39, 74);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text("AUTORIZACAO DE ABASTECIMENTO", margin, 47);
-  doc.setDrawColor(219, 226, 234);
-  doc.setLineWidth(0.4);
-  doc.line(margin, 52, pageWidth - margin, 52);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(x, top, w, copyHeight, 1.5, 1.5, "S");
 
-  doc.setFontSize(10);
-  doc.text("Numero da autorizacao", margin, 61);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(16);
-  doc.text(auth.authorization_code, margin, 69);
-  doc.setFillColor(...statusColor);
-  doc.roundedRect(pageWidth - margin - 36, 57, 36, 11, 2, 2, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8);
-  doc.text(currentStatus.label.toLocaleUpperCase("pt-BR"), pageWidth - margin - 18, 63.8, { align: "center" });
-  doc.setTextColor(71, 85, 105);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  doc.text("Emitida em: " + dateTime(auth.created_at), margin, 76);
-
-  let y = 86;
-  const section = (title: string) => {
-    doc.setFillColor(239, 246, 255);
-    doc.roundedRect(margin, y, contentWidth, 7, 1.5, 1.5, "F");
+    doc.setFillColor(20, 39, 74);
+    doc.roundedRect(x + 0.4, top + 0.4, w - 0.8, 13, 1.2, 1.2, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(30, 64, 175);
-    doc.text(title, margin + 3, y + 4.7);
-    y += 12;
-  };
-  const field = (label: string, value: string, x: number, rowY: number, width: number) => {
+    doc.setFontSize(11);
+    doc.setTextColor(255, 255, 255);
+    doc.text("FLEETWISE", x + 4, top + 6.2);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(100, 116, 139);
-    doc.text(label.toLocaleUpperCase("pt-BR"), x, rowY);
+    doc.setFontSize(5.6);
+    doc.text(copyLabel, right - 4, top + 5.1, { align: "right" });
+    doc.setFontSize(5.8);
+    doc.text(organization?.legal_name || organization?.name || "Organizacao", x + 4, top + 10.2);
+    if (organization?.tax_id) {
+      doc.text("CNPJ/CPF: " + organization.tax_id, right - 4, top + 10.2, { align: "right" });
+    }
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(30, 41, 59);
-    const lines = doc.splitTextToSize(value || "Nao informado", width);
-    doc.text(lines.slice(0, 2), x, rowY + 5);
+    doc.setFontSize(9.5);
+    doc.setTextColor(20, 39, 74);
+    doc.text("AUTORIZACAO DE ABASTECIMENTO", x + 4, top + 20.5);
+    doc.setFontSize(11);
+    doc.text(auth.authorization_code, right - 4, top + 20.5, { align: "right" });
+
+    doc.setFillColor(...stateColors[state.key]);
+    doc.roundedRect(right - 32, top + 22.8, 28, 6.3, 1.2, 1.2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.8);
+    doc.setTextColor(255, 255, 255);
+    doc.text(state.label.toLocaleUpperCase("pt-BR"), right - 18, top + 26.7, { align: "center" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(...labelColor);
+    doc.text("Emitida: " + issuedDate, x + 4, top + 26.5);
+
+    field("Veiculo / equipamento", vehicle?.description ?? "Ativo nao encontrado", x + 4, top + 33.4, twoCol);
+    field("Placa / codigo", [vehicle?.plate, vehicle?.code].filter(Boolean).join(" / ") || "Nao informado", x + 4 + twoCol + colGap, top + 33.4, twoCol);
+    field("Motorista autorizado", driver?.name ?? "Nao especificado", x + 4, top + 44.9, twoCol);
+    field("Posto / fornecedor", supplier?.name ?? "A escolha conforme regras da empresa", x + 4 + twoCol + colGap, top + 44.9, twoCol);
+    field("Validade", dateTime(auth.valid_from) + " ate " + dateTime(auth.valid_until), x + 4, top + 56.3, twoCol);
+    field("Combustivel", fuelLabels[vehicle?.fuel_type ?? ""] ?? "Conforme cadastro do ativo", x + 4 + twoCol + colGap, top + 56.3, twoCol);
+
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(x + 3, top + 63, w - 6, 7.3, 1, 1, "F");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.1);
+    doc.setTextColor(71, 85, 105);
+    doc.text("Limites opcionais: " + limitSummary, x + 5, top + 67.7);
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(x + 3, top + 73, right - 3, top + 73);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(30, 64, 175);
+    doc.text("DADOS DO ABASTECIMENTO — PREENCHER NO POSTO", x + 4, top + 79);
+
+    const fx = x + 4;
+    const usable = w - 8;
+    const widths = [30, 43, 29, 41, 41];
+    const gap = (usable - widths.reduce((sum, value) => sum + value, 0)) / 4;
+    let pos = fx;
+    const fields = [
+      returnCopy ? "Data / hora" : "Data / hora",
+      vehicle?.meter_kind === "hourmeter" ? "Horimetro (h)" : "Odometro (km)",
+      "Litros",
+      "Preco por litro (R$)",
+      "Valor total (R$)"
+    ];
+    fields.forEach((label, i) => {
+      blankField(label, pos, top + 86, widths[i]);
+      pos += widths[i] + gap;
+    });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.5);
+    doc.setTextColor(71, 85, 105);
+    const instruction = active
+      ? "Conferir o veiculo e a validade antes do abastecimento. Preencher os dados reais, colher as assinaturas e devolver a via de retorno a empresa."
+      : "ATENCAO: documento " + state.label.toLocaleUpperCase("pt-BR") + ". Nao utilizar para novo abastecimento. Manter somente para historico.";
+    doc.text(doc.splitTextToSize(instruction, w - 8).slice(0, 2), x + 4, top + 100);
+
+    const signatureY = top + 117;
+    const signatureWidth = (w - 16) / 2;
+    doc.setDrawColor(100, 116, 139);
+    doc.line(x + 4, signatureY, x + 4 + signatureWidth, signatureY);
+    doc.line(right - 4 - signatureWidth, signatureY, right - 4, signatureY);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(5.7);
+    doc.setTextColor(71, 85, 105);
+    doc.text("Assinatura do motorista", x + 4 + signatureWidth / 2, signatureY + 4, { align: "center" });
+    doc.text(
+      returnCopy ? "Recebido / conferido pela empresa" : "Carimbo / assinatura do posto",
+      right - 4 - signatureWidth / 2,
+      signatureY + 4,
+      { align: "center" }
+    );
+
+    doc.setFontSize(5.1);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Documento gerado eletronicamente pelo Fleetwise.", x + 4, top + 131.2);
+    doc.text(auth.authorization_code, right - 4, top + 131.2, { align: "right" });
   };
-  const colGap = 8;
-  const colWidth = (contentWidth - colGap) / 2;
-  section("ATIVO AUTORIZADO");
-  field("Veiculo / equipamento", data.vehicle?.description ?? "Ativo nao encontrado", margin, y, colWidth);
-  field("Codigo do ativo", data.vehicle?.code ?? "-", margin + colWidth + colGap, y, colWidth);
-  y += 17;
-  field("Placa / identificacao", data.vehicle?.plate ?? "Nao informada", margin, y, colWidth);
-  field("Combustivel", fuelLabels[data.vehicle?.fuel_type ?? ""] ?? "Conforme cadastro do ativo", margin + colWidth + colGap, y, colWidth);
-  y += 17;
 
-  section("CONDUTOR E FORNECEDOR");
-  field("Motorista autorizado", data.driver?.name ?? "Nao especificado", margin, y, colWidth);
-  field("CNH / categoria", data.driver
-    ? [data.driver.license_number, data.driver.license_category ? "Categoria " + data.driver.license_category : null].filter(Boolean).join(" - ") || "Nao informada"
-    : "Nao especificada", margin + colWidth + colGap, y, colWidth);
-  y += 17;
-  field("Posto / fornecedor autorizado", data.supplier?.name ?? "Qualquer fornecedor", margin, y, colWidth);
-  field("CNPJ/CPF do fornecedor", data.supplier?.tax_id ?? "Nao informado", margin + colWidth + colGap, y, colWidth);
-  y += 18;
+  section(5, "VIA DO POSTO — MANTER NO POSTO", false);
 
-  section("LIMITES AUTORIZADOS");
-  const amount = auth.max_amount_cents === null || auth.max_amount_cents === ""
-    ? "Sem limite financeiro informado"
-    : brl(Number(auth.max_amount_cents));
-  field("Volume maximo", liters(auth.max_liters), margin, y, colWidth);
-  field("Valor maximo autorizado", amount, margin + colWidth + colGap, y, colWidth);
-  y += 19;
-
-  section("PERIODO DE VALIDADE");
-  field("Valida a partir de", dateTime(auth.valid_from), margin, y, colWidth);
-  field("Valida ate", dateTime(auth.valid_until), margin + colWidth + colGap, y, colWidth);
-  y += 21;
-
-  doc.setDrawColor(203, 213, 225);
-  doc.setFillColor(248, 250, 252);
-  doc.roundedRect(margin, y, contentWidth, 21, 2, 2, "FD");
-  doc.setTextColor(51, 65, 85);
+  doc.setDrawColor(100, 116, 139);
+  doc.setLineWidth(0.45);
+  doc.setLineDashPattern([1.8, 1.3], 0);
+  doc.line(7, 148.5, pageWidth - 7, 148.5);
+  doc.setLineDashPattern([], 0);
+  doc.setFillColor(255, 255, 255);
+  doc.rect(72, 145.8, 66, 5.5, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("CONDICOES DE UTILIZACAO", margin + 4, y + 6);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8);
-  const conditions = isUsable
-    ? "Documento valido somente para o ativo, condutor, fornecedor (quando indicado), limites e periodo descritos acima. O abastecimento realizado deve ser comprovado e registrado no sistema. Este documento nao substitui nota fiscal ou cupom fiscal."
-    : "ATENCAO: esta autorizacao nao esta atualmente valida (" + currentStatus.label.toLocaleUpperCase("pt-BR") + "). Nao utilizar para novos abastecimentos. O documento foi mantido para fins de historico.";
-  doc.text(doc.splitTextToSize(conditions, contentWidth - 8).slice(0, 3), margin + 4, y + 11);
-  y += 30;
-
-  doc.setDrawColor(148, 163, 184);
-  doc.setLineWidth(0.3);
-  doc.line(margin, y + 8, margin + 72, y + 8);
-  doc.line(pageWidth - margin - 72, y + 8, pageWidth - margin, y + 8);
-  doc.setFont("helvetica", "normal");
+  doc.setFontSize(6.5);
   doc.setTextColor(71, 85, 105);
-  doc.setFontSize(8);
-  doc.text("Responsavel pela autorizacao", margin + 36, y + 13, { align: "center" });
-  doc.text("Assinatura do condutor", pageWidth - margin - 36, y + 13, { align: "center" });
+  doc.text("RECORTAR / PICOTAR NESTA LINHA", pageWidth / 2, 149.3, { align: "center" });
 
-  doc.setFontSize(7);
-  doc.setTextColor(100, 116, 139);
-  doc.text("Documento gerado eletronicamente pelo Fleetwise.", margin, 293);
-  doc.text("Autorizacao: " + auth.authorization_code, pageWidth - margin, 293, { align: "right" });
-  doc.setDrawColor(226, 232, 240);
-  doc.line(margin, 295, pageWidth - margin, 295);
+  section(155, "VIA DE RETORNO — DEVOLVER A EMPRESA", true);
+
   return doc;
 }
 
