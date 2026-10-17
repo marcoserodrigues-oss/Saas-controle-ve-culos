@@ -14,3 +14,66 @@
 @media(max-width:600px){.vehicle-manager{padding:14px}.vehicle-toolbar{align-items:flex-start;flex-direction:column}.vehicle-toolbar-actions{width:100%}.vehicle-toolbar-actions button{flex:1}.vehicle-fields{grid-template-columns:1fr}.vehicle-list-toolbar{align-items:flex-start;flex-direction:column}.vehicle-search{width:100%}}
 
 .auth-text-button{display:block;width:100%;border:0;background:transparent;color:#4169c9;font-size:11px;font-weight:650;padding:12px 8px;margin-top:7px;cursor:pointer}.auth-text-button:hover{text-decoration:underline}.auth-success{border:1px solid #b9e5ce;background:#effaf4;color:#26734d;border-radius:7px;padding:10px;font-size:11px;line-height:1.5;margin:12px 0}
+
+
+/* Tire lifecycle module */
+.tire-manager { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.tire-toolbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.tire-toolbar h2 { margin: 0 0 6px; font-size: 19px; font-weight: 700; }
+.tire-toolbar p { margin: 0; color: var(--text-muted, #6b7280); font-size: 13px; line-height: 1.5; }
+.tire-toolbar-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.tire-toolbar-actions button, .tire-tabs button, .tire-list-toolbar button { display: inline-flex; align-items: center; gap: 7px; }
+.tire-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.tire-kpi { min-width: 0; background: #fff; border: 1px solid #e6eaf0; border-radius: 12px; padding: 16px; box-shadow: 0 2px 8px rgba(15,23,42,.025); }
+.tire-kpi span { display: block; color: #657084; font-size: 12px; line-height: 1.4; }
+.tire-kpi strong { display: block; margin: 9px 0 5px; color: #182233; font-size: 24px; letter-spacing: -.5px; overflow-wrap: anywhere; }
+.tire-kpi small { display: block; color: #7b8494; font-size: 11px; line-height: 1.4; }
+.tire-tabs { display: flex; gap: 6px; border-bottom: 1px solid #e1e6ed; overflow-x: auto; }
+.tire-tab { flex: 0 0 auto; background: transparent; border: 0; border-bottom: 2px solid transparent; padding: 12px 13px; color: #687386; cursor: pointer; font-size: 13px; font-weight: 600; }
+.tire-tab.active { color: #2458a6; border-bottom-color: #3979d6; }
+.tire-list-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.tire-search { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #dce2eb; border-radius: 9px; padding: 0 11px; min-width: 250px; max-width: 440px; flex: 1; height: 40px; color: #7b8494; }
+.tire-search input { border: 0; outline: none; width: 100%; height: 100%; background: transparent; color: #182233; font: inherit; font-size: 13px; }
+.tire-list-toolbar select { height: 40px; border-radius: 9px; border: 1px solid #dce2eb; padding: 0 12px; background: #fff; color: #253044; }
+.tire-status { display: inline-flex; align-items: center; max-width: 160px; border-radius: 999px; padding: 5px 9px; font-size: 11px; line-height: 1.2; font-weight: 700; white-space: nowrap; background: #edf1f6; color: #455166; }
+.tire-status-in_stock { background: #e5f7ec; color: #167044; }
+.tire-status-mounted { background: #e6efff; color: #2058ab; }
+.tire-status-retread { background: #fff3d9; color: #8b5900; }
+.tire-status-repair { background: #f1eaff; color: #6741a2; }
+.tire-status-scrapped, .tire-status-sold { background: #fce9e9; color: #a23c3c; }
+.tire-empty { min-height: 130px; padding: 28px 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: #8a93a1; }
+.tire-empty strong { color: #465166; font-size: 13px; }
+.tire-empty span { font-size: 12px; }
+.tire-table-sub { display: block; margin-top: 3px; color: #7b8494; font-size: 11px; }
+.tire-note { display: flex; flex-direction: column; gap: 3px; max-width: 260px; min-width: 100px; white-space: normal; }
+.tire-note strong { font-size: 11px; color: #424e61; }
+.tire-note span { font-size: 11px; color: #7b8494; overflow-wrap: anywhere; }
+.tire-footnote { margin: -3px 0 0; color: #727d8d; font-size: 11px; line-height: 1.55; }
+.tire-modal-backdrop { position: fixed; inset: 0; z-index: 1000; background: rgba(15,23,42,.48); display: flex; align-items: center; justify-content: center; padding: 20px; overflow-y: auto; }
+.tire-modal { width: min(760px, 100%); max-height: min(88vh, 900px); overflow-y: auto; background: #fff; padding: 22px; border-radius: 15px; box-shadow: 0 24px 80px rgba(15,23,42,.24); }
+.tire-modal .vehicle-form-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; margin-bottom: 20px; }
+.tire-modal .vehicle-form-heading h3 { margin: 0 0 5px; font-size: 18px; }
+.tire-modal .vehicle-form-heading p { margin: 0; color: #6e7889; font-size: 12px; line-height: 1.45; }
+.tire-modal .vehicle-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.tire-modal .vehicle-fields label { display: flex; flex-direction: column; gap: 6px; color: #475368; font-size: 12px; font-weight: 600; min-width: 0; }
+.tire-modal .vehicle-fields input, .tire-modal .vehicle-fields select, .tire-modal .vehicle-fields textarea { width: 100%; min-width: 0; box-sizing: border-box; border: 1px solid #dce2eb; border-radius: 8px; padding: 10px 11px; font: inherit; font-size: 13px; color: #202b3b; background: white; outline-color: #5b8edb; }
+.tire-modal .vehicle-fields textarea { resize: vertical; }
+.tire-modal .tire-wide-field { grid-column: 1 / -1; }
+.tire-modal .vehicle-form-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 20px; }
+.tire-modal-hint { margin-top: 13px; border-radius: 8px; padding: 10px 12px; background: #f3f6fa; color: #536075; font-size: 12px; line-height: 1.5; }
+.tire-modal-hint strong { color: #253044; }
+.tire-manager .vehicle-row-actions { display: flex; gap: 5px; align-items: center; }
+.tire-manager .vehicle-row-actions .secondary-button { min-width: 34px; padding: 7px; justify-content: center; }
+@media (max-width: 1200px) { .tire-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .tire-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tire-kpi { padding: 12px; }
+  .tire-kpi strong { font-size: 20px; }
+  .tire-toolbar-actions { width: 100%; }
+  .tire-toolbar-actions button { flex: 1; justify-content: center; }
+  .tire-modal-backdrop { align-items: flex-start; padding: 10px; }
+  .tire-modal { padding: 16px; max-height: 94vh; }
+  .tire-modal .vehicle-fields { grid-template-columns: minmax(0, 1fr); }
+  .tire-modal .tire-wide-field { grid-column: auto; }
+  .tire-search { min-width: 100%; max-width: none; }
+}
