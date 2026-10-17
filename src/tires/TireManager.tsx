@@ -367,14 +367,45 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   async function savePosition(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || saving) return;
-    const code = positionForm.position_code.trim();
+    const requestedCode = positionForm.position_code.trim();
     const label = positionForm.position_label.trim();
-    if (!positionForm.vehicle_id || code.length < 1 || label.length < 2) { setError("Informe veículo, código e descrição da posição."); return; }
-    if (activePositions.some(p => p.vehicle_id === positionForm.vehicle_id && (p.position_code.toLowerCase() === code.toLowerCase() || p.position_label.toLowerCase() === label.toLowerCase()))) { setError("Já existe uma posição ativa com este código ou descrição nesse veículo."); return; }
+    const vehicleId = positionForm.vehicle_id;
+    const autoGenerate = !requestedCode;
+    if (!vehicleId || label.length < 2) { setError("Informe veículo e descrição da posição. O código pode ficar em branco para ser gerado."); return; }
+    if (positions.some(p => p.vehicle_id === vehicleId && ((requestedCode && p.position_code.toLowerCase() === requestedCode.toLowerCase()) || p.position_label.toLowerCase() === label.toLowerCase()))) {
+      setError("Já existe uma posição com este código ou descrição nesse veículo.");
+      return;
+    }
     setSaving(true); setError(""); setNotice("");
-    const result = await supabase.from("vehicle_tire_positions").insert({organization_id:organizationId,vehicle_id:positionForm.vehicle_id,position_code:code,position_label:label,is_active:true}).select("id").maybeSingle();
-    if (result.error || !result.data) setError(result.error?.code === "23505" ? "Código de posição já cadastrado." : "Não foi possível cadastrar a posição.");
-    else { setShowPositionForm(false); setPositionForm({vehicle_id:"",position_code:"",position_label:""}); setNotice("Posição de montagem cadastrada."); await load(); }
+    let code = requestedCode;
+    let saveError: {code?:string;message?:string}|null = null;
+    let saved = false;
+    let generationFailed = false;
+
+    for (let attempt = 0; attempt < (autoGenerate ? 5 : 1); attempt++) {
+      if (!code) {
+        try { code = await generatePositionCode(organizationId, vehicleId); }
+        catch { generationFailed = true; break; }
+      }
+      const result = await supabase.from("vehicle_tire_positions").insert({organization_id:organizationId,vehicle_id:vehicleId,position_code:code,position_label:label,is_active:true}).select("id").maybeSingle();
+      if (result.error && autoGenerate && result.error.code === "23505" && result.error.message.includes("vehicle_tire_positions_vehicle_id_position_code_key")) {
+        saveError = result.error;
+        code = "";
+        continue;
+      }
+      saveError = result.error;
+      saved = Boolean(result.data);
+      break;
+    }
+
+    if (generationFailed) setError("Não foi possível gerar o código da posição. Verifique a conexão e tente novamente.");
+    else if (saveError || !saved) setError(autoGenerate && !saveError ? "Não foi possível reservar um código único para a posição após várias tentativas." : saveError?.code === "23505" ? "Código de posição já cadastrado nesse veículo." : "Não foi possível cadastrar a posição.");
+    else {
+      setShowPositionForm(false);
+      setPositionForm({vehicle_id:"",position_code:"",position_label:""});
+      setNotice(autoGenerate ? "Posição cadastrada com código " + code + "." : "Posição de montagem cadastrada.");
+      await load();
+    }
     setSaving(false);
   }
   async function togglePosition(position: Position) {
@@ -486,7 +517,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     {showPositionForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-position-title"><div className="vehicle-form-heading"><div><h3 id="tire-position-title">Nova posição de pneu</h3><p>Cadastre posições conforme os eixos e o layout real do veículo.</p></div><button className="icon-button" onClick={() => setShowPositionForm(false)} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={savePosition}><div className="vehicle-fields">
         <label>Veículo / equipamento<select required value={positionForm.vehicle_id} onChange={e=>setPositionForm(f=>({...f,vehicle_id:e.target.value}))}><option value="">Selecione...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : ""}</option>)}</select></label>
-        <label>Código curto<input required maxLength={30} value={positionForm.position_code} onChange={e=>setPositionForm(f=>({...f,position_code:e.target.value}))} placeholder="Ex.: E1-EXT"/></label>
+        <label>Código curto<input maxLength={30} value={positionForm.position_code} onChange={e=>setPositionForm(f=>({...f,position_code:e.target.value}))} placeholder="Opcional · gerar POS-0001"/></label>
         <label>Descrição da posição<input required minLength={2} maxLength={100} value={positionForm.position_label} onChange={e=>setPositionForm(f=>({...f,position_label:e.target.value}))} placeholder="Ex.: Eixo 1 lado externo"/></label>
       </div><div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => setShowPositionForm(false)}>Cancelar</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : "Cadastrar posição"}</button></div></form>
     </section></div>}
