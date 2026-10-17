@@ -103,7 +103,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     if(last&&m<num(last.meter_value)){setError("A leitura não pode ser menor que a última leitura cronológica registrada para este ativo.");return;}
     setSaving(true);setError("");setNotice("");
     const unit=Math.round(p*100);
-    const payload={organization_id:organizationId,vehicle_id:v.id,driver_id:form.driver_id||null,supplier_id:form.supplier_id||null,authorization_id:form.authorization_id||null,occurred_at:date.toISOString(),meter_value:m,liters:l,unit_price_cents:unit,total_cents:Math.round(l*unit),fueling_kind:form.fueling_kind,document_number:form.document_number.trim()||null,notes:form.notes.trim()||null};
+    const payload={organization_id:organizationId,vehicle_id:v.id,driver_id:form.driver_id||null,supplier_id:form.supplier_id||null,authorization_id:form.authorization_id||null,occurred_at:date.toISOString(),meter_value:m,liters:l,unit_price_cents:unit,fueling_kind:form.fueling_kind,document_number:form.document_number.trim()||null,notes:form.notes.trim()||null};
     const result=editing
       ? await supabase.from("fuel_events").update(payload).eq("id",editing).eq("organization_id",organizationId).select("id").maybeSingle()
       : await supabase.from("fuel_events").insert({...payload,created_by:(await supabase.auth.getUser()).data.user?.id??null}).select("id").maybeSingle();
