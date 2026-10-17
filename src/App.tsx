@@ -4,8 +4,10 @@ import { VehicleManager } from "./vehicles/VehicleManager";
 import { FuelManager } from "./fuel/FuelManager";
 import { MaintenanceManager } from "./maintenance/MaintenanceManager";
 import { TireManager } from "./tires/TireManager";
+import { Dashboard } from "./dashboard/Dashboard";
+import { ReportsManager } from "./reports/ReportsManager";
 import {
-  Activity, AlertTriangle, ArrowUpRight, Bell,
+  AlertTriangle, ArrowUpRight, Bell,
   CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel, Gauge,
   LayoutDashboard, Menu, Package, Search, Settings, ShieldCheck, Truck,
   Wrench, CircleDot, FileBarChart, Users, X
@@ -99,48 +101,12 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
           </div>
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
-          {activeModule === "dashboard" ? <Dashboard onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : activeModule === "tires" && organizationId ? <TireManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
+          {activeModule === "dashboard" && organizationId ? <Dashboard organizationId={organizationId} onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : activeModule === "tires" && organizationId ? <TireManager organizationId={organizationId} /> : activeModule === "reports" && organizationId ? <ReportsManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
           <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>Fleetwise · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
         </div>
       </main>
     </div>
   );
-}
-
-function Dashboard({ onNavigate }: { onNavigate: (module: ModuleId) => void }) {
-  const stats = [
-    { label: "Veículos e equipamentos", value: "—", note: "Aguardando cadastro", icon: Truck, tint: "blue", trend: "Sem dados" },
-    { label: "Gastos no período", value: "—", note: "Sem registros financeiros", icon: Activity, tint: "violet", trend: "Sem dados" },
-    { label: "Manutenções pendentes", value: "—", note: "Aguardando ordens de serviço", icon: Wrench, tint: "amber", trend: "Sem dados" },
-    { label: "Pneus em operação", value: "—", note: "Aguardando inventário", icon: CircleDot, tint: "teal", trend: "Sem dados" }
-  ];
-  return <>
-    <section className="stat-grid" aria-label="Indicadores principais">
-      {stats.map((stat) => { const Icon = stat.icon; return <article className="stat-card" key={stat.label}><div className="stat-top"><span>{stat.label}</span><div className={`stat-icon ${stat.tint}`}><Icon size={18} /></div></div><div className="stat-value">{stat.value}</div><div className="stat-bottom"><span>{stat.note}</span><span className="neutral-trend">{stat.trend}</span></div></article>; })}
-    </section>
-
-    <section className="dashboard-grid">
-      <article className="panel activity-panel">
-        <div className="panel-heading"><div><h2>Resumo operacional</h2><p>Dados consolidados a partir dos registros válidos</p></div><span className="period-pill">Período atual <ChevronDown size={13} /></span></div>
-        <div className="empty-chart"><div className="chart-illustration"><div className="chart-grid"><span /><span /><span /><span /></div><div className="chart-bars"><i /><i /><i /><i /><i /><i /><i /></div><div className="chart-line"><span /><span /><span /><span /></div></div><div className="empty-title">Seu painel começa com os dados reais</div><p>Cadastre seus veículos e lance as primeiras movimentações para visualizar tendências e indicadores.</p><button className="primary-button" onClick={() => onNavigate("vehicles")}>Cadastrar primeiro veículo <span>→</span></button></div>
-      </article>
-      <article className="panel attention-panel">
-        <div className="panel-heading"><div><h2>Central de atenção</h2><p>Alertas e pontos que exigem acompanhamento</p></div><div className="attention-symbol"><AlertTriangle size={17} /></div></div>
-        <div className="empty-alerts"><div className="empty-alert-icon"><ShieldCheck size={22} /></div><strong>Nenhum alerta calculado</strong><p>Os alertas aparecerão após o cadastro de dados válidos. Não exibimos pendências fictícias.</p></div>
-        <div className="attention-links"><button onClick={() => onNavigate("maintenance")}><Wrench size={16} /><span>Manutenção</span><span className="link-arrow">→</span></button><button onClick={() => onNavigate("tires")}><CircleDot size={16} /><span>Inspeção de pneus</span><span className="link-arrow">→</span></button><button onClick={() => onNavigate("fuel")}><Fuel size={16} /><span>Abastecimentos</span><span className="link-arrow">→</span></button></div>
-      </article>
-    </section>
-
-    <section className="bottom-grid">
-      <article className="panel quick-panel"><div className="panel-heading"><div><h2>Acesso rápido</h2><p>Atalhos para tarefas comuns</p></div></div><div className="quick-actions">
-        <button onClick={() => onNavigate("vehicles")}><span className="quick-icon quick-blue"><Truck size={19} /></span><span><strong>Adicionar veículo</strong><small>Cadastre um ativo da frota</small></span><span className="link-arrow">↗</span></button>
-        <button onClick={() => onNavigate("fuel")}><span className="quick-icon quick-orange"><Fuel size={19} /></span><span><strong>Novo abastecimento</strong><small>Registrar combustível e leitura</small></span><span className="link-arrow">↗</span></button>
-        <button onClick={() => onNavigate("maintenance")}><span className="quick-icon quick-violet"><Wrench size={19} /></span><span><strong>Abrir ordem de serviço</strong><small>Registrar manutenção</small></span><span className="link-arrow">↗</span></button>
-        <button onClick={() => onNavigate("tires")}><span className="quick-icon quick-teal"><CircleDot size={19} /></span><span><strong>Gerenciar pneus</strong><small>Montagens, ciclos e inspeções</small></span><span className="link-arrow">↗</span></button>
-      </div></article>
-      <article className="panel integrity-panel"><div className="panel-heading"><div><h2>Saúde dos dados</h2><p>Princípios de confiabilidade</p></div><div className="integrity-badge"><ShieldCheck size={17} /></div></div><div className="integrity-list"><div><span className="integrity-check"><ShieldCheck size={15} /></span><span><strong>Sem dados demonstrativos</strong><small>Indicadores vazios até haver registros reais.</small></span></div><div><span className="integrity-check"><ShieldCheck size={15} /></span><span><strong>Histórico rastreável</strong><small>Correções devem preservar valores anteriores.</small></span></div><div><span className="integrity-check"><ShieldCheck size={15} /></span><span><strong>Cálculos verificáveis</strong><small>Fórmulas cobertas por testes de domínio.</small></span></div></div><div className="integrity-foot"><span className="integrity-status-dot" /> Fundação em desenvolvimento</div></article>
-    </section>
-  </>;
 }
 
 function ModulePlaceholder({ moduleId, description, search }: { moduleId: ModuleId; description: string; search: string }) {
