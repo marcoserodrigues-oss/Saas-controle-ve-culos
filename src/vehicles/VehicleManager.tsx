@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { Pencil, Plus, Power, RefreshCw, Search, Truck, X } from "lucide-react";
 import { supabase } from "../lib/supabase";
+import { nextSequentialCode } from "../lib/automaticCode";
 
 type VehicleKind = "vehicle" | "equipment";
 type MeterKind = "odometer" | "hourmeter";
@@ -14,6 +15,24 @@ type VehicleRecord = {
 };
 
 const emptyForm = { code: "", description: "", plate: "", vin: "", kind: "vehicle" as VehicleKind, meter_kind: "odometer" as MeterKind, fuel_type: "diesel" as FuelType, make: "", model: "", model_year: "" };
+
+async function generateVehicleCode(organizationId: string, prefix: "VEI" | "EQP") {
+  if (!supabase) throw new Error("Banco de dados não configurado.");
+  const codes: string[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from("vehicles")
+      .select("code")
+      .eq("organization_id", organizationId)
+      .order("code")
+      .range(from, from + 999);
+    if (error) throw error;
+    const batch = (data ?? []) as { code: string }[];
+    codes.push(...batch.map(row => row.code));
+    if (batch.length < 1000) break;
+  }
+  return nextSequentialCode(codes, prefix);
+}
+
 
 export function VehicleManager({ organizationId }: { organizationId: string }) {
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
@@ -47,13 +66,17 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
 
   const saveVehicle = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!supabase) return;
+    if (!supabase || saving) return;
     setSaving(true);
     setError("");
     setNotice("");
-    const payload = {
+
+    const requestedCode = form.code.trim();
+    const editingRecord = editingId ? vehicles.find(v => v.id === editingId) : undefined;
+    const autoGenerate = !editingId && !requestedCode;
+    let code = requestedCode || editingRecord?.code || "";
+    const payloadBase = {
       organization_id: organizationId,
-      code: form.code.trim(),
       description: form.description.trim(),
       plate: form.plate.trim().toUpperCase() || null,
       kind: form.kind,
@@ -64,36 +87,50 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
       model_year: form.model_year ? Number(form.model_year) : null,
       vin: form.vin.trim().toUpperCase() || null
     };
-    let saveError: { code?: string } | null = null;
+
+    let saveError: { code?: string; message?: string } | null = null;
     let saved = false;
-    if (editingId) {
-      const { data, error } = await supabase.from("vehicles")
-        .update(payload)
-        .eq("id", editingId)
-        .eq("organization_id", organizationId)
-        .select("id")
-        .maybeSingle();
-      saveError = error;
-      saved = Boolean(data);
-    } else {
-      const { data, error } = await supabase.from("vehicles")
-        .insert(payload)
-        .select("id")
-        .maybeSingle();
-      saveError = error;
-      saved = Boolean(data);
+    let generationFailed = false;
+
+    for (let attempt = 0; attempt < (autoGenerate ? 5 : 1); attempt++) {
+      if (!code) {
+        try {
+          code = await generateVehicleCode(organizationId, form.kind === "equipment" ? "EQP" : "VEI");
+        } catch {
+          generationFailed = true;
+          break;
+        }
+      }
+      const payload = { ...payloadBase, code };
+      const result = editingId
+        ? await supabase.from("vehicles").update(payload).eq("id", editingId).eq("organization_id", organizationId).select("id").maybeSingle()
+        : await supabase.from("vehicles").insert(payload).select("id").maybeSingle();
+
+      if (result.error && autoGenerate && result.error.code === "23505" && result.error.message.includes("vehicles_organization_id_code_key")) {
+        saveError = result.error;
+        code = "";
+        continue;
+      }
+      saveError = result.error;
+      saved = Boolean(result.data);
+      break;
     }
-    if (saveError) {
+
+    if (generationFailed) {
+      setError("Não foi possível gerar um código automaticamente. Verifique a conexão e tente novamente.");
+    } else if (saveError) {
       setError(saveError.code === "23505"
         ? "Já existe um ativo com esse código, placa ou chassi nesta organização."
         : "Não foi possível salvar. Confira os campos e as permissões do banco.");
     } else if (!saved) {
-      setError("Nenhuma alteração foi confirmada. Atualize a lista e confira se o cadastro ainda existe e se você tem permissão.");
+      setError(autoGenerate
+        ? "Não foi possível reservar um código único após várias tentativas. Tente salvar novamente."
+        : "Nenhuma alteração foi confirmada. Atualize a lista e confira se o cadastro ainda existe e se você tem permissão.");
     } else {
       setForm(emptyForm);
       setEditingId(null);
       setShowForm(false);
-      setNotice(editingId ? "Cadastro atualizado." : "Cadastro salvo no Supabase.");
+      setNotice(editingId ? "Cadastro atualizado." : (autoGenerate ? "Cadastro salvo com código " + code + "." : "Cadastro salvo no Supabase."));
       await loadVehicles();
     }
     setSaving(false);
@@ -113,9 +150,9 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
     {error && <div className="vehicle-message vehicle-error" role="alert">{error}<button aria-label="Fechar aviso" onClick={() => setError("")}><X size={14} /></button></div>}
     {notice && <div className="vehicle-message vehicle-success" role="status">{notice}<button aria-label="Fechar aviso" onClick={() => setNotice("")}><X size={14} /></button></div>}
     {showForm && <form className="vehicle-form" onSubmit={saveVehicle}>
-      <div className="vehicle-form-heading"><div><strong>{editingId ? "Editar veículo ou equipamento" : "Novo veículo ou equipamento"}</strong><p>O código é obrigatório e deve ser único na organização.</p></div><button type="button" className="icon-button" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }} aria-label="Fechar formulário"><X size={17} /></button></div>
+      <div className="vehicle-form-heading"><div><strong>{editingId ? "Editar veículo ou equipamento" : "Novo veículo ou equipamento"}</strong><p>Informe um código interno ou deixe em branco para gerar um código único automaticamente.</p></div><button type="button" className="icon-button" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }} aria-label="Fechar formulário"><X size={17} /></button></div>
       <div className="vehicle-fields">
-        <label>Código interno *<input required maxLength={40} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="Ex.: FRO-001" /></label>
+        <label>Código interno<input maxLength={40} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder={form.kind === "equipment" ? "Opcional · ex.: EQP-0001" : "Opcional · ex.: VEI-0001"} /></label>
         <label>Descrição *<input required maxLength={160} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Ex.: Caminhão trator" /></label>
         <label>Placa<input maxLength={12} value={form.plate} onChange={(e) => setForm({ ...form, plate: e.target.value })} placeholder="ABC1D23" /></label>
         <label>Chassi / VIN<input maxLength={40} value={form.vin} onChange={(e) => setForm({ ...form, vin: e.target.value })} placeholder="Identificação do fabricante" /></label>
