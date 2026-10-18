@@ -97,7 +97,28 @@ jobs:
           exit 1
 
       - name: Run browser end-to-end tests
-        run: node e2e/fuel-authorization.spec.cjs
+        run: |
+          mkdir -p test-results
+          node e2e/fuel-authorization.spec.cjs
+
+      - name: Verify persisted settlement in isolated database
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source /tmp/supabase-local.env
+          set +a
+          RESULT="$(psql "${DB_URL}" -X -v ON_ERROR_STOP=1 -Atq -c "
+            select case
+              when fa.consumed_liters = 30
+               and fa.consumed_amount_cents = 30000
+               and (select count(*) from public.fuel_events fe
+                     where fe.authorization_id = fa.id and fe.status = 'active') = 1
+              then 'PASS' else 'FAIL' end
+            from public.fuel_authorizations fa
+            where fa.id = 'e3000000-0000-4000-8000-000000000001';
+          ")"
+          test "${RESULT}" = "PASS"
 
       - name: Upload browser diagnostics on failure
         if: failure()
