@@ -8,7 +8,7 @@ import { supabase } from "../lib/supabase";
 type Vehicle = { id: string; code: string; plate: string | null; description: string; meter_kind: string; fuel_type: string; status: string };
 type Driver = { id: string; name: string; status: string };
 type Supplier = { id: string; name: string; status: string };
-type AuthorizationRow = { id: string; authorization_code: string; vehicle_id: string; driver_id: string | null; supplier_id: string | null; valid_from: string; valid_until: string; status: string; consumed_liters: number | string; consumed_amount_cents: number | string };
+type AuthorizationRow = { id: string; authorization_code: string; vehicle_id: string; driver_id: string | null; supplier_id: string | null; valid_from: string; valid_until: string; max_liters: number | string | null; max_amount_cents: number | string | null; status: string; consumed_liters: number | string; consumed_amount_cents: number | string };
 type EventRow = { id: string; vehicle_id: string; driver_id: string | null; supplier_id: string | null; authorization_id: string | null; occurred_at: string; meter_value: number; liters: number; unit_price_cents: number; total_cents: number | null; fueling_kind: "full" | "partial"; document_number: string | null; notes: string | null; status: string };
 type FormValues = { vehicle_id: string; driver_id: string; supplier_id: string; authorization_id: string; occurred_at: string; meter_value: string; liters: string; unit_price: string; fueling_kind: "full" | "partial"; document_number: string; notes: string };
 const localDateTimePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,16);
@@ -54,7 +54,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     const authorizationRows: AuthorizationRow[] = [];
     for (let offset = 0; ; offset += 500) {
       const page = await supabase.from("fuel_authorizations")
-        .select("id,authorization_code,vehicle_id,driver_id,supplier_id,valid_from,valid_until,status,consumed_liters,consumed_amount_cents")
+        .select("id,authorization_code,vehicle_id,driver_id,supplier_id,valid_from,valid_until,max_liters,max_amount_cents,status,consumed_liters,consumed_amount_cents")
         .eq("organization_id",organizationId)
         .order("created_at",{ascending:false})
         .range(offset,offset+499);
@@ -165,6 +165,18 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
       const isReusingSameAuthorization = existingEvent?.authorization_id === authorization.id;
       if(entryMode==="settlement"&&!isReusingSameAuthorization&&!isAuthorizationPendingSettlement(authorization.status,authorization.consumed_liters,authorization.valid_from)){
         setError("Esta autorização já recebeu baixa ou não está ativa. Atualize a lista e selecione outra autorização em aberto.");
+        return;
+      }
+      const previousLiters = isReusingSameAuthorization && existingEvent?.status !== "cancelled" ? num(existingEvent?.liters) : 0;
+      const previousAmount = isReusingSameAuthorization && existingEvent?.status !== "cancelled" ? num(existingEvent?.total_cents ?? Math.round(num(existingEvent?.liters) * num(existingEvent?.unit_price_cents))) : 0;
+      const projectedLiters = Math.max(0, num(authorization.consumed_liters) - previousLiters) + l;
+      const projectedAmount = Math.max(0, num(authorization.consumed_amount_cents) - previousAmount) + Math.round(l * Math.round(p * 100));
+      if(authorization.max_liters != null && projectedLiters > num(authorization.max_liters) + 0.0005){
+        setError(`Este abastecimento ultrapassa o limite da autorização (${num(authorization.max_liters).toLocaleString("pt-BR")} L).`);
+        return;
+      }
+      if(authorization.max_amount_cents != null && projectedAmount > num(authorization.max_amount_cents)){
+        setError(`Este abastecimento ultrapassa o valor autorizado (${brl(num(authorization.max_amount_cents))}).`);
         return;
       }
     }
