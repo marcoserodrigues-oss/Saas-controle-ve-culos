@@ -33,7 +33,7 @@ jobs:
           node-version: 22
 
       - name: Install application dependencies
-        run: npm ci
+        run: npm install
 
       - name: Install Playwright and Chromium
         run: |
