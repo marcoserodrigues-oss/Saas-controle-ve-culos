@@ -14,7 +14,7 @@ const assert = require("node:assert/strict");
     await page.getByLabel("Senha").fill("E2E-Only-Password-2026!");
     await page.getByRole("button", { name: "Entrar com segurança" }).click();
 
-    await page.getByRole("button", { name: "Abastecimentos" }).waitFor({ timeout: 15000 });
+    await page.getByRole("button", { name: "Abastecimentos", exact: true }).waitFor({ timeout: 15000 });
     await page.getByRole("button", { name: /Dar baixa em autorização/ }).click();
     const authorizationSelect = page.getByLabel("Autorização em aberto *");
     const authorizationValue = await authorizationSelect.locator("option").filter({ hasText: "E2E-AUTH-001" }).getAttribute("value");
