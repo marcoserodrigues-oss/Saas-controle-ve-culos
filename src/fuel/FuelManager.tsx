@@ -11,7 +11,8 @@ type Supplier = { id: string; name: string; status: string };
 type AuthorizationRow = { id: string; authorization_code: string; vehicle_id: string; driver_id: string | null; supplier_id: string | null; valid_from: string; valid_until: string; status: string; consumed_liters: number | string; consumed_amount_cents: number | string };
 type EventRow = { id: string; vehicle_id: string; driver_id: string | null; supplier_id: string | null; authorization_id: string | null; occurred_at: string; meter_value: number; liters: number; unit_price_cents: number; total_cents: number | null; fueling_kind: "full" | "partial"; document_number: string | null; notes: string | null; status: string };
 type FormValues = { vehicle_id: string; driver_id: string; supplier_id: string; authorization_id: string; occurred_at: string; meter_value: string; liters: string; unit_price: string; fueling_kind: "full" | "partial"; document_number: string; notes: string };
-const blank = (): FormValues => ({ vehicle_id: "", driver_id: "", supplier_id: "", authorization_id: "", occurred_at: new Date().toISOString().slice(0,16), meter_value: "", liters: "", unit_price: "", fueling_kind: "full", document_number: "", notes: "" });
+const localDateTimePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,16);
+const blank = (): FormValues => ({ vehicle_id: "", driver_id: "", supplier_id: "", authorization_id: "", occurred_at: localDateTimePart(), meter_value: "", liters: "", unit_price: "", fueling_kind: "full", document_number: "", notes: "" });
 const brl = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 const num = (v: unknown) => Number(v ?? 0);
 const dateLabel = (v: string) => new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(v));
@@ -133,7 +134,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     setError("");
   };
   const edit = (r:EventRow)=>{
-    setForm({vehicle_id:r.vehicle_id,driver_id:r.driver_id??"",supplier_id:r.supplier_id??"",authorization_id:r.authorization_id??"",occurred_at:new Date(r.occurred_at).toISOString().slice(0,16),meter_value:String(r.meter_value),liters:String(r.liters),unit_price:(r.unit_price_cents/100).toFixed(2),fueling_kind:r.fueling_kind,document_number:r.document_number??"",notes:r.notes??""});
+    setForm({vehicle_id:r.vehicle_id,driver_id:r.driver_id??"",supplier_id:r.supplier_id??"",authorization_id:r.authorization_id??"",occurred_at:localDateTimePart(new Date(r.occurred_at)),meter_value:String(r.meter_value),liters:String(r.liters),unit_price:(r.unit_price_cents/100).toFixed(2),fueling_kind:r.fueling_kind,document_number:r.document_number??"",notes:r.notes??""});
     setEditing(r.id);
     setEntryMode(r.authorization_id ? "settlement" : "manual");
     setShowForm(true);
@@ -227,7 +228,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:13}}>
         {entryMode==="settlement"&&<label style={field}>Autorização em aberto *<select required style={input} value={form.authorization_id} onChange={e=>chooseAuthorization(e.target.value)}><option value="" disabled>Selecione a autorização a dar baixa</option>{authorizationOptions.map(a=>{const v=vehicleMap.get(a.vehicle_id);const state=authorizationWorkflowStatus(a.status,a.valid_from,a.valid_until,a.consumed_liters).label;return <option key={a.id} value={a.id}>{a.authorization_code} · {v?.plate??v?.description??"Ativo"} · {state}</option>;})}</select><small style={{color:"#64748b"}}>Escolha a autorização devolvida pelo motorista. O ativo e os dados fixos serão preenchidos automaticamente.</small></label>}
         <label style={field}>Veículo/equipamento *<select required style={input} value={form.vehicle_id} disabled={entryMode==="settlement"||Boolean(selectedAuthorization)} onChange={e=>set("vehicle_id",e.target.value)}><option value="">{entryMode==="settlement"?"Preenchido pela autorização":"Selecione"}</option>{vehicles.filter(v=>v.status==="active"||v.id===form.vehicle_id).map(v=><option key={v.id} value={v.id}>{v.code} · {v.plate? v.plate+" · ":""}{v.description}</option>)}</select></label>
-        <label style={field}>Data e hora *<input required type="datetime-local" max={new Date().toISOString().slice(0,16)} style={input} value={form.occurred_at} onChange={e=>set("occurred_at",e.target.value)}/></label>
+        <label style={field}>Data e hora *<input required type="datetime-local" max={localDateTimePart()} style={input} value={form.occurred_at} onChange={e=>set("occurred_at",e.target.value)}/></label>
         <label style={field}>{vehicleMap.get(form.vehicle_id)?.meter_kind==="hourmeter"?"Horímetro (h) *":"Odômetro (km) *"}<input required type="number" min="0" step="0.1" style={input} value={form.meter_value} onChange={e=>set("meter_value",e.target.value)}/></label>
         <label style={field}>Combustível<input readOnly style={{...input,background:"#f8fafc"}} value={labels[vehicleMap.get(form.vehicle_id)?.fuel_type??""]??"Conforme cadastro do ativo"}/></label>
         <label style={field}>Litros *<input required type="number" min="0.01" max="10000" step="0.01" style={input} value={form.liters} onChange={e=>set("liters",e.target.value)}/></label>
