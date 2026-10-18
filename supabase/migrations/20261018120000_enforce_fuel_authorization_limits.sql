@@ -67,7 +67,7 @@ begin
 
   v_consumed_liters := greatest(0, v_consumed_liters - v_previous_liters);
   v_consumed_amount_cents := greatest(0, v_consumed_amount_cents - v_previous_amount_cents);
-  v_new_amount_cents := round(new.liters * new.unit_price_cents)::bigint;
+  v_new_amount_cents := coalesce(new.total_cents, round(new.liters * new.unit_price_cents)::bigint);
 
   if v_authorization.max_liters is not null
      and v_consumed_liters + new.liters > v_authorization.max_liters + 0.0005 then
@@ -89,7 +89,7 @@ revoke all on function public.enforce_fuel_authorization_limits() from public, a
 
 drop trigger if exists fuel_events_enforce_authorization_limits on public.fuel_events;
 create trigger fuel_events_enforce_authorization_limits
-before insert or update of organization_id, vehicle_id, driver_id, supplier_id, authorization_id, occurred_at, liters, unit_price_cents, status
+before insert or update of organization_id, vehicle_id, driver_id, supplier_id, authorization_id, occurred_at, liters, unit_price_cents, total_cents, status
 on public.fuel_events
 for each row
 execute function public.enforce_fuel_authorization_limits();
