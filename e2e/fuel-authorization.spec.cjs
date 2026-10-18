@@ -3,7 +3,8 @@ const assert = require("node:assert/strict");
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage();
+  const context = await browser.newContext({ timezoneId: "America/Sao_Paulo" });
+  const page = await context.newPage();
   const consoleErrors = [];
   page.on("pageerror", (error) => consoleErrors.push(error.message));
 
