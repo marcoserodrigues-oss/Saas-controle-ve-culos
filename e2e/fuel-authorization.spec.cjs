@@ -75,7 +75,7 @@ const assert = require("node:assert/strict");
     await page.getByRole("heading", { name: "Ordens de serviço" }).waitFor({ timeout: 15000 });
     await page.getByRole("button", { name: "Nova ordem", exact: true }).click();
     const maintenanceDateValue = await page.getByLabel("Data de abertura").inputValue();
-    assert.match(maintenanceDateValue, /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/, "maintenance local date/time input must be populated");
+    assert.match(maintenanceDateValue, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "maintenance local date/time input must be populated");
     assert.equal(
       await page.evaluate((value) => Math.abs(new Date(value).getTime() - Date.now()) < 120000, maintenanceDateValue),
       true,
