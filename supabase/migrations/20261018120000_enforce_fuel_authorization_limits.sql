@@ -34,7 +34,7 @@ begin
     end loop;
   end if;
 
-  if new.authorization_id is null or new.status <> 'active' then
+  if new.authorization_id is null or new.status = 'cancelled' then
     return new;
   end if;
 
@@ -75,7 +75,7 @@ begin
 
   if tg_op = 'UPDATE'
      and old.authorization_id = new.authorization_id
-     and old.status = 'active' then
+     and old.status <> 'cancelled' then
     v_previous_liters := coalesce(old.liters, 0);
     v_previous_amount_cents := coalesce(old.total_cents, round(old.liters * old.unit_price_cents)::bigint);
   end if;
