@@ -31,7 +31,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install application dependencies
         run: npm ci
@@ -132,4 +131,4 @@ jobs:
 
       - name: Stop isolated Supabase
         if: always()
-        run: supabase stop --no-backup
+        run: supabase stop --no-backup || true
