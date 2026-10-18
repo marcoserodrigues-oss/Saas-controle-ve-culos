@@ -1,6 +1,6 @@
 -- Isolated pgTAP regression tests for the fuel authorization guard.
 begin;
-select plan(16);
+select plan(19);
 
 insert into public.organizations (id, name)
 values ('a1000000-0000-4000-8000-000000000001', 'Fleetwise QA');
@@ -135,6 +135,33 @@ select is(
   (select consumed_liters from public.fuel_authorizations where id = 'a3000000-0000-4000-8000-000000000001'),
   0::numeric,
   'detaching a fueling releases the prior authorization consumption');
+
+select lives_ok($qa$
+  insert into public.fuel_events
+    (organization_id, vehicle_id, authorization_id, occurred_at, meter_value, liters, unit_price_cents, fueling_kind, status)
+  values
+    ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000001', '2026-06-03T12:00:00Z', 1090, 20, 1000, 'full', 'inactive');
+$qa$, 'inactive fueling records do not consume authorization capacity');
+
+select is(
+  (select consumed_liters from public.fuel_authorizations where id = 'a3000000-0000-4000-8000-000000000001'),
+  0::numeric,
+  'inactive fueling does not increase consumed liters');
+
+select lives_ok($qa$
+  insert into public.fuel_events
+    (organization_id, vehicle_id, authorization_id, occurred_at, meter_value, liters, unit_price_cents, fueling_kind, status)
+  values
+    ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000001', '2026-06-04T12:00:00Z', 1090, 40, 1000, 'full', 'active');
+$qa$, 'active fueling can use the remaining authorization capacity');
+
+select throws_ok($qa$
+  update public.fuel_events
+     set status = 'active'
+   where organization_id = 'a1000000-0000-4000-8000-000000000001'
+     and authorization_id = 'a3000000-0000-4000-8000-000000000001'
+     and status = 'inactive';
+$qa$, '23514', null, 'reactivating an inactive fueling cannot exceed the authorization limit');
 
 select * from finish();
 rollback;
