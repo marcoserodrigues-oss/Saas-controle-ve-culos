@@ -1,6 +1,6 @@
 -- Isolated pgTAP regression tests for the fuel authorization guard.
 begin;
-select plan(19);
+select plan(20);
 
 insert into public.organizations (id, name)
 values ('a1000000-0000-4000-8000-000000000001', 'Fleetwise QA');
