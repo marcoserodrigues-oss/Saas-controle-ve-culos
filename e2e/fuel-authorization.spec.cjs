@@ -16,15 +16,10 @@ const assert = require("node:assert/strict");
 
     await page.getByRole("button", { name: "Abastecimentos" }).waitFor({ timeout: 15000 });
     await page.getByRole("button", { name: /Dar baixa em autorização/ }).click();
-    await page.getByLabel("Autorização em aberto *").selectOption({
-      label: /E2E-AUTH-001/
-    }).catch(async () => {
-      // Playwright selectOption does not accept a RegExp in the label field.
-      const option = page.locator('select').filter({ has: page.locator('option', { hasText: "E2E-AUTH-001" }) });
-      const value = await option.locator('option', { hasText: "E2E-AUTH-001" }).getAttribute("value");
-      assert.ok(value, "E2E authorization option must be available");
-      await page.getByLabel("Autorização em aberto *").selectOption(value);
-    });
+    const authorizationSelect = page.getByLabel("Autorização em aberto *");
+    const authorizationValue = await authorizationSelect.locator("option").filter({ hasText: "E2E-AUTH-001" }).getAttribute("value");
+    assert.ok(authorizationValue, "E2E authorization option must be available");
+    await authorizationSelect.selectOption(authorizationValue);
 
     await page.getByLabel("Litros *").fill("51");
     await page.getByLabel("Preço por litro (R$) *").fill("10.00");
