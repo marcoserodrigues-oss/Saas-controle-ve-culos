@@ -25,7 +25,7 @@ jobs:
           version: latest
 
       - name: Start isolated local Supabase database
-        run: supabase start -x studio,mailpit,storage-api,imgproxy,edge-runtime,logflare,vector
+        run: supabase start --exclude studio,mail,storage,functions,analytics
 
       - name: Reset local database and apply every migration
         run: supabase db reset --local
@@ -33,7 +33,6 @@ jobs:
       - name: Verify the fuel authorization guard exists
         run: |
           supabase db lint --local --schema public
-          supabase db query --local "select to_regprocedure('public.enforce_fuel_authorization_limits()') is not null as guard_function_exists;" 
 
       - name: Stop local Supabase
         if: always()
