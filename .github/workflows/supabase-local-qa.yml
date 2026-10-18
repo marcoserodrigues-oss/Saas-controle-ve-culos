@@ -37,6 +37,17 @@ jobs:
       - name: Run fuel authorization regression tests
         run: supabase test db --local
 
+      - name: Install PostgreSQL client for concurrent-session QA
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Test concurrent fuel authorization settlements
+        run: |
+          supabase status -o env > /tmp/supabase-local.env
+          set -a
+          source /tmp/supabase-local.env
+          set +a
+          bash supabase/tests/fuel_authorization_concurrency.sh "$DB_URL"
+
       - name: Verify the fuel authorization guard exists
         run: |
           supabase db lint --local --schema public
