@@ -81,7 +81,9 @@ jobs:
             (id, organization_id, authorization_code, vehicle_id, valid_from, valid_until, max_liters, max_amount_cents, status)
           values
             ('e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001', 'E2E-AUTH-001',
-             'e2000000-0000-4000-8000-000000000001', now() - interval '1 day', now() + interval '30 days', 50, 100000, 'active');
+             'e2000000-0000-4000-8000-000000000001', now() - interval '1 day', now() + interval '30 days', 50, 100000, 'active'),
+            ('e3000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000001', 'E2E-AUTH-AMOUNT',
+             'e2000000-0000-4000-8000-000000000001', now() - interval '1 day', now() + interval '30 days', 100, 25000, 'active');
           SQL
 
       - name: Start Vite application
@@ -103,7 +105,7 @@ jobs:
           mkdir -p test-results
           node e2e/fuel-authorization.spec.cjs
 
-      - name: Verify persisted settlement in isolated database
+      - name: Verify persisted settlement and rejected amount-cap case
         shell: bash
         run: |
           set -euo pipefail
@@ -116,6 +118,10 @@ jobs:
                and fa.consumed_amount_cents = 30000
                and (select count(*) from public.fuel_events fe
                      where fe.authorization_id = fa.id and fe.status = 'active') = 1
+               and (select count(*) from public.fuel_events fe
+                     where fe.authorization_id = 'e3000000-0000-4000-8000-000000000002') = 0
+               and (select consumed_liters from public.fuel_authorizations
+                     where id = 'e3000000-0000-4000-8000-000000000002') = 0
               then 'PASS' else 'FAIL' end
             from public.fuel_authorizations fa
             where fa.id = 'e3000000-0000-4000-8000-000000000001';
