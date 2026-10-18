@@ -83,8 +83,18 @@ const assert = require("node:assert/strict");
     );
     await page.getByRole("button", { name: "Fechar", exact: true }).click();
 
+    // Editing a seeded maintenance order must convert UTC to Sao Paulo local time.
+    await page.getByRole("button", { name: "Editar E2E-OS-001", exact: true }).click();
+    const editedMaintenanceDateValue = await page.getByLabel("Data de abertura").inputValue();
+    assert.equal(
+      editedMaintenanceDateValue,
+      "2026-10-17T09:34",
+      "editing a maintenance order must display 12:34 UTC as 09:34 in Sao Paulo"
+    );
+    await page.getByRole("button", { name: "Fechar", exact: true }).click();
+
     assert.deepEqual(consoleErrors, [], "the app should not throw uncaught browser errors");
-    console.log("PASS: login, organization membership, local datetime defaults and editing, liters and amount cap rejection, valid settlement, maintenance datetime handling, and browser runtime checks.");
+    console.log("PASS: login, organization membership, local datetime defaults and editing, liters and amount cap rejection, valid settlement, maintenance datetime defaults and edit conversion, and browser runtime checks.");
   } catch (error) {
     await page.screenshot({ path: "test-results/fuel-authorization-failure.png", fullPage: true }).catch(() => {});
     throw error;
