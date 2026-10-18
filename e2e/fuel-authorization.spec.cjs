@@ -59,8 +59,32 @@ const assert = require("node:assert/strict");
     await page.getByRole("status").filter({ hasText: "Baixa da autorização registrada" }).waitFor({ timeout: 15000 });
 
     await page.getByText("30", { exact: false }).first().waitFor();
+
+    // Editing an existing fueling must preserve its local wall-clock time.
+    await page.getByRole("button", { name: "Editar abastecimento" }).first().click();
+    const editedDateValue = await page.getByLabel("Data e hora *").inputValue();
+    assert.equal(
+      await page.evaluate((value) => Math.abs(new Date(value).getTime() - Date.now()) < 120000, editedDateValue),
+      true,
+      "editing a fueling must restore the local date/time without a UTC offset shift"
+    );
+    await page.getByRole("button", { name: "Fechar", exact: true }).click();
+
+    // Maintenance orders use the same datetime-local handling and need their own browser assertion.
+    await page.getByRole("button", { name: "Manutenção", exact: true }).click();
+    await page.getByRole("heading", { name: "Ordens de serviço" }).waitFor({ timeout: 15000 });
+    await page.getByRole("button", { name: "Nova ordem", exact: true }).click();
+    const maintenanceDateValue = await page.getByLabel("Data de abertura").inputValue();
+    assert.match(maintenanceDateValue, /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}$/, "maintenance local date/time input must be populated");
+    assert.equal(
+      await page.evaluate((value) => Math.abs(new Date(value).getTime() - Date.now()) < 120000, maintenanceDateValue),
+      true,
+      "maintenance datetime-local default must be within two minutes of the actual local time"
+    );
+    await page.getByRole("button", { name: "Fechar", exact: true }).click();
+
     assert.deepEqual(consoleErrors, [], "the app should not throw uncaught browser errors");
-    console.log("PASS: login, organization membership, local datetime handling, liters and amount cap rejection, valid settlement, and browser runtime checks.");
+    console.log("PASS: login, organization membership, local datetime defaults and editing, liters and amount cap rejection, valid settlement, maintenance datetime handling, and browser runtime checks.");
   } catch (error) {
     await page.screenshot({ path: "test-results/fuel-authorization-failure.png", fullPage: true }).catch(() => {});
     throw error;
