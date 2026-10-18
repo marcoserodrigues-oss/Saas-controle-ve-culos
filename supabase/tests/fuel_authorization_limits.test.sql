@@ -124,12 +124,12 @@ select throws_ok($qa$
     ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000007', '2026-06-01T12:00:00Z', 1000, 10, 1000, 'full', 'active');
 $qa$, '23514', null, 'rejects a fueling against an inactive authorization');
 
-select lives_ok($
+select lives_ok($qa$
   update public.fuel_events
      set authorization_id = null
    where authorization_id = 'a3000000-0000-4000-8000-000000000001'
      and status = 'active';
-$, 'detaching an authorization from a fueling is allowed');
+$qa$, 'detaching an authorization from a fueling is allowed');
 
 select is(
   (select consumed_liters from public.fuel_authorizations where id = 'a3000000-0000-4000-8000-000000000001'),
