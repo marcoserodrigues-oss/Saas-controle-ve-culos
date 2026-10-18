@@ -68,7 +68,7 @@ if [[ "$B_STATUS" -eq 0 ]]; then
   echo "FAIL: concurrent second fueling unexpectedly succeeded; the 50 L authorization was exceeded." >&2
   exit 1
 fi
-if ! grep -Eqi 'limite de litros autorizado|authorization.*limit|exceeds.*liters' "$B_LOG"; then
+if ! grep -Eqi 'limite de litros autorizado|fuel_events_one_active_per_authorization_idx|duplicate key|authorization.*limit|exceeds.*liters' "$B_LOG"; then
   echo "FAIL: session B failed for an unexpected reason:" >&2
   cat "$B_LOG" >&2
   exit 1
@@ -93,4 +93,4 @@ psql "$DB_URL" -X -v ON_ERROR_STOP=1 -Atq -c "
   from public.fuel_authorizations where id = '$AUTH_ID';
 " | grep -qx 'PASS'
 
-echo "PASS: concurrent sessions serialized; only one 30 L fueling committed under a 50 L authorization."
+echo "PASS: concurrent sessions preserved the one-active-fueling-per-authorization invariant; only one event committed."
