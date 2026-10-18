@@ -29,7 +29,7 @@ jobs:
           version: latest
 
       - name: Start isolated local Supabase database
-        run: supabase start --exclude studio,mail,storage,functions,analytics
+        run: supabase start --exclude studio,mailpit,storage-api,edge-runtime,logflare,vector,postgres-meta,imgproxy
 
       - name: Reset local database and apply every migration
         run: supabase db reset --local
