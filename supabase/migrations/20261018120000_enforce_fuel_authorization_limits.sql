@@ -16,31 +16,26 @@ declare
   v_previous_liters numeric(18,3) := 0;
   v_previous_amount_cents bigint := 0;
 begin
-  if new.authorization_id is null or new.status = 'cancelled' then
-    return new;
-  end if;
-
+  -- On every UPDATE, lock old/new authorization rows in a stable order before
+  -- any early return. This includes cancellation and detaching an authorization,
+  -- so concurrent settlements cannot observe stale consumption counters.
   if tg_op = 'UPDATE' then
     v_exclude_id := old.id;
+    for v_lock_id in
+      select fa.id
+        from public.fuel_authorizations as fa
+       where fa.id = any(array_remove(array[old.authorization_id, new.authorization_id], null))
+       order by fa.id
+    loop
+      perform 1
+        from public.fuel_authorizations as fa
+       where fa.id = v_lock_id
+       for update;
+    end loop;
+  end if;
 
-    -- If an event is reassigned, lock both authorization rows in a stable order.
-    -- This avoids opposite-direction updates deadlocking while the AFTER trigger
-    -- refreshes consumption for both the old and new authorizations.
-    if old.authorization_id is not null
-       and new.authorization_id is not null
-       and old.authorization_id is distinct from new.authorization_id then
-      for v_lock_id in
-        select fa.id
-          from public.fuel_authorizations as fa
-         where fa.id in (old.authorization_id, new.authorization_id)
-         order by fa.id
-      loop
-        perform 1
-          from public.fuel_authorizations as fa
-         where fa.id = v_lock_id
-         for update;
-      end loop;
-    end if;
+  if new.authorization_id is null or new.status = 'cancelled' then
+    return new;
   end if;
 
   select *
