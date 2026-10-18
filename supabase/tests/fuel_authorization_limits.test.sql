@@ -1,6 +1,6 @@
 -- Isolated pgTAP regression tests for the fuel authorization guard.
 begin;
-select plan(7);
+select plan(10);
 
 insert into public.organizations (id, name)
 values ('a1000000-0000-4000-8000-000000000001', 'Fleetwise QA');
@@ -65,6 +65,24 @@ select throws_ok($$
   values
     ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000002', 'a3000000-0000-4000-8000-000000000005', '2026-06-01T12:00:00Z', 1000, 10, 1000, 'full', 'active');
 $$, '23514', null, 'rejects a vehicle that does not match the authorization');
+
+select lives_ok($
+  update public.fuel_events
+     set status = 'cancelled'
+   where authorization_id = 'a3000000-0000-4000-8000-000000000001';
+$, 'cancelling a fueling is allowed and releases the authorization consumption');
+
+select is(
+  (select consumed_liters from public.fuel_authorizations where id = 'a3000000-0000-4000-8000-000000000001'),
+  0::numeric,
+  'cancelled fueling is removed from consumed liters');
+
+select lives_ok($
+  insert into public.fuel_events
+    (organization_id, vehicle_id, authorization_id, occurred_at, meter_value, liters, unit_price_cents, fueling_kind, status)
+  values
+    ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000001', '2026-06-02T12:00:00Z', 1040, 50, 1000, 'full', 'active');
+$, 'authorization capacity can be reused after cancelling the prior fueling');
 
 select * from finish();
 rollback;
