@@ -9,6 +9,7 @@ as $$
 declare
   v_authorization public.fuel_authorizations%rowtype;
   v_exclude_id uuid;
+  v_lock_id uuid;
   v_consumed_liters numeric(18,3);
   v_consumed_amount_cents bigint;
   v_new_amount_cents bigint;
@@ -21,6 +22,25 @@ begin
 
   if tg_op = 'UPDATE' then
     v_exclude_id := old.id;
+
+    -- If an event is reassigned, lock both authorization rows in a stable order.
+    -- This avoids opposite-direction updates deadlocking while the AFTER trigger
+    -- refreshes consumption for both the old and new authorizations.
+    if old.authorization_id is not null
+       and new.authorization_id is not null
+       and old.authorization_id is distinct from new.authorization_id then
+      for v_lock_id in
+        select fa.id
+          from public.fuel_authorizations as fa
+         where fa.id in (old.authorization_id, new.authorization_id)
+         order by fa.id
+      loop
+        perform 1
+          from public.fuel_authorizations as fa
+         where fa.id = v_lock_id
+         for update;
+      end loop;
+    end if;
   end if;
 
   select *
