@@ -30,6 +30,9 @@ jobs:
       - name: Reset local database and apply every migration
         run: supabase db reset --local
 
+      - name: Run fuel authorization regression tests
+        run: supabase test db --local
+
       - name: Verify the fuel authorization guard exists
         run: |
           supabase db lint --local --schema public
