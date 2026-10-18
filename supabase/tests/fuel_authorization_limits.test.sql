@@ -103,26 +103,26 @@ select lives_ok($$
     ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000001', '2026-06-02T12:00:00Z', 1040, 50, 1000, 'full', 'active');
 $$, 'authorization capacity can be reused after cancelling the prior fueling');
 
-select throws_ok($
+select throws_ok($qa$
   insert into public.fuel_events
     (organization_id, vehicle_id, driver_id, supplier_id, authorization_id, occurred_at, meter_value, liters, unit_price_cents, fueling_kind, status)
   values
     ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', null, 'a5000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000006', '2026-06-01T12:00:00Z', 1000, 10, 1000, 'full', 'active');
-$, '23514', null, 'rejects a driver that does not match the authorization');
+$qa$, '23514', null, 'rejects a driver that does not match the authorization');
 
-select throws_ok($
+select throws_ok($qa$
   insert into public.fuel_events
     (organization_id, vehicle_id, driver_id, supplier_id, authorization_id, occurred_at, meter_value, liters, unit_price_cents, fueling_kind, status)
   values
     ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'a4000000-0000-4000-8000-000000000001', null, 'a3000000-0000-4000-8000-000000000006', '2026-06-01T12:00:00Z', 1000, 10, 1000, 'full', 'active');
-$, '23514', null, 'rejects a supplier that does not match the authorization');
+$qa$, '23514', null, 'rejects a supplier that does not match the authorization');
 
-select throws_ok($
+select throws_ok($qa$
   insert into public.fuel_events
     (organization_id, vehicle_id, authorization_id, occurred_at, meter_value, liters, unit_price_cents, fueling_kind, status)
   values
     ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'a3000000-0000-4000-8000-000000000007', '2026-06-01T12:00:00Z', 1000, 10, 1000, 'full', 'active');
-$, '23514', null, 'rejects a fueling against an inactive authorization');
+$qa$, '23514', null, 'rejects a fueling against an inactive authorization');
 
 select * from finish();
 rollback;
