@@ -12,6 +12,8 @@ declare
   v_consumed_liters numeric(18,3);
   v_consumed_amount_cents bigint;
   v_new_amount_cents bigint;
+  v_previous_liters numeric(18,3) := 0;
+  v_previous_amount_cents bigint := 0;
 begin
   if new.authorization_id is null or new.status = 'cancelled' then
     return new;
@@ -51,15 +53,20 @@ begin
       using errcode = '23514';
   end if;
 
-  select coalesce(sum(fe.liters), 0),
-         coalesce(sum(coalesce(fe.total_cents, round(fe.liters * fe.unit_price_cents)::bigint)), 0)::bigint
-    into v_consumed_liters, v_consumed_amount_cents
-    from public.fuel_events fe
-   where fe.organization_id = new.organization_id
-     and fe.authorization_id = new.authorization_id
-     and fe.status <> 'cancelled'
-     and (v_exclude_id is null or fe.id <> v_exclude_id);
+  -- The counters are refreshed by the existing AFTER trigger. Because the authorization
+  -- row is locked above, concurrent settlements serialize and see the latest committed totals.
+  v_consumed_liters := coalesce(v_authorization.consumed_liters, 0);
+  v_consumed_amount_cents := coalesce(v_authorization.consumed_amount_cents, 0);
 
+  if tg_op = 'UPDATE'
+     and old.authorization_id = new.authorization_id
+     and old.status <> 'cancelled' then
+    v_previous_liters := coalesce(old.liters, 0);
+    v_previous_amount_cents := coalesce(old.total_cents, round(old.liters * old.unit_price_cents)::bigint);
+  end if;
+
+  v_consumed_liters := greatest(0, v_consumed_liters - v_previous_liters);
+  v_consumed_amount_cents := greatest(0, v_consumed_amount_cents - v_previous_amount_cents);
   v_new_amount_cents := round(new.liters * new.unit_price_cents)::bigint;
 
   if v_authorization.max_liters is not null
