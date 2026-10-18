@@ -84,6 +84,12 @@ jobs:
              'e2000000-0000-4000-8000-000000000001', now() - interval '1 day', now() + interval '30 days', 50, 100000, 'active'),
             ('e3000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000001', 'E2E-AUTH-AMOUNT',
              'e2000000-0000-4000-8000-000000000001', now() - interval '1 day', now() + interval '30 days', 100, 25000, 'active');
+          insert into public.work_orders
+            (id, organization_id, vehicle_id, order_number, category, description, opened_at, meter_at_open, labor_cost_cents, parts_cost_cents, status)
+          values
+            ('e4000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
+             'e2000000-0000-4000-8000-000000000001', 'E2E-OS-001', 'corrective', 'Ordem de teste E2E',
+             '2026-10-17T12:34:00Z', 1000, 0, 0, 'open');
           SQL
 
       - name: Start Vite application
