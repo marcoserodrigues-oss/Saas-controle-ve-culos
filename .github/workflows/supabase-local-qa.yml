@@ -33,6 +33,7 @@ jobs:
       - name: Verify the fuel authorization guard exists
         run: |
           supabase db lint --local --schema public
+          supabase db query --local "select 1 / (case when to_regprocedure('public.enforce_fuel_authorization_limits()') is not null then 1 else 0 end);"
 
       - name: Stop local Supabase
         if: always()
