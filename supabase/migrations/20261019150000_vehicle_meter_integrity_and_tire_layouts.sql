@@ -19,10 +19,11 @@ with readings as (
   order by organization_id, vehicle_id, at asc, meter asc
 )
 update public.vehicles v
-set initial_meter = coalesce(fr.meter, 0)
-from (select v2.id, fr.meter from public.vehicles v2 left join first_reading fr on fr.organization_id=v2.organization_id and fr.vehicle_id=v2.id) backfill
-left join first_reading fr on fr.vehicle_id=backfill.id
-where v.id=backfill.id and v.initial_meter is null;
+set initial_meter = fr.meter
+from first_reading fr
+where v.id=fr.vehicle_id and v.organization_id=fr.organization_id and v.initial_meter is null;
+
+update public.vehicles set initial_meter = 0 where initial_meter is null;
 
 alter table public.vehicles alter column initial_meter set default 0;
 alter table public.vehicles alter column initial_meter set not null;
@@ -152,3 +153,48 @@ where not exists (
     and existing.vehicle_id = v.id
     and lower(existing.position_code) = lower(p->>'code')
 );
+
+-- The baseline may be corrected for legacy assets only if it does not contradict recorded history.
+create or replace function public.validate_vehicle_meter_baseline()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_min numeric;
+  v_has_history boolean;
+begin
+  if tg_op = 'UPDATE' and new.meter_kind is distinct from old.meter_kind then
+    select exists (
+      select 1 from public.fuel_events f where f.organization_id=new.organization_id and f.vehicle_id=new.id
+      union all select 1 from public.work_orders w where w.organization_id=new.organization_id and w.vehicle_id=new.id
+      union all select 1 from public.tire_events t where t.organization_id=new.organization_id and t.vehicle_id=new.id
+    ) into v_has_history;
+    if v_has_history then
+      raise exception 'Não é possível alterar o tipo de medidor depois que o ativo possui histórico operacional.' using errcode = '23514';
+    end if;
+  end if;
+
+  if tg_op = 'UPDATE' and new.initial_meter is distinct from old.initial_meter then
+    select min(meter) into v_min from (
+      select f.meter_value as meter from public.fuel_events f
+      where f.organization_id=new.organization_id and f.vehicle_id=new.id and f.status <> 'cancelled'
+      union all select w.meter_at_open from public.work_orders w
+      where w.organization_id=new.organization_id and w.vehicle_id=new.id and w.meter_at_open is not null
+      union all select w.meter_at_close from public.work_orders w
+      where w.organization_id=new.organization_id and w.vehicle_id=new.id and w.meter_at_close is not null
+      union all select t.meter_value from public.tire_events t
+      where t.organization_id=new.organization_id and t.vehicle_id=new.id and t.meter_value is not null
+    ) history;
+    if v_min is not null and new.initial_meter > v_min then
+      raise exception 'A leitura inicial (%) não pode ser maior que a primeira leitura registrada (%).', new.initial_meter, v_min using errcode = '23514';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists validate_vehicle_meter_baseline on public.vehicles;
+create trigger validate_vehicle_meter_baseline before update of initial_meter, meter_kind on public.vehicles
+for each row execute function public.validate_vehicle_meter_baseline();
