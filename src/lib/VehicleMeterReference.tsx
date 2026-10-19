@@ -13,20 +13,19 @@ export function VehicleMeterReference({ organizationId, vehicleId, meterKind = "
     if (!vehicleId || !supabase) { setReading(null); return; }
     setLoading(true);
     void (async () => {
-      const [fuel, orders, tires] = await Promise.all([
-        supabase!.from("fuel_events").select("meter_value,occurred_at").eq("organization_id", organizationId).eq("vehicle_id", vehicleId).neq("status", "cancelled").not("meter_value", "is", null).limit(2000),
-        supabase!.from("work_orders").select("meter_at_open,meter_at_close,opened_at,closed_at,status").eq("organization_id", organizationId).eq("vehicle_id", vehicleId).neq("status", "cancelled").limit(2000),
-        supabase!.from("tire_events").select("meter_value,occurred_at").eq("organization_id", organizationId).eq("vehicle_id", vehicleId).not("meter_value", "is", null).limit(2000)
+      const [fuel, orderOpen, orderClose, tires] = await Promise.all([
+        supabase!.from("fuel_events").select("meter_value,occurred_at").eq("organization_id", organizationId).eq("vehicle_id", vehicleId).neq("status", "cancelled").not("meter_value", "is", null).order("meter_value", { ascending: false }).limit(1).maybeSingle(),
+        supabase!.from("work_orders").select("meter_at_open,opened_at").eq("organization_id", organizationId).eq("vehicle_id", vehicleId).neq("status", "cancelled").not("meter_at_open", "is", null).order("meter_at_open", { ascending: false }).limit(1).maybeSingle(),
+        supabase!.from("work_orders").select("meter_at_close,closed_at,opened_at").eq("organization_id", organizationId).eq("vehicle_id", vehicleId).neq("status", "cancelled").not("meter_at_close", "is", null).order("meter_at_close", { ascending: false }).limit(1).maybeSingle(),
+        supabase!.from("tire_events").select("meter_value,occurred_at").eq("organization_id", organizationId).eq("vehicle_id", vehicleId).not("meter_value", "is", null).order("meter_value", { ascending: false }).limit(1).maybeSingle()
       ]);
       const rows: Reading[] = [];
       const baseline = Number(initialMeter);
       if (Number.isFinite(baseline) && baseline >= 0) rows.push({ value: baseline, source: "Cadastro do veículo", at: null });
-      for (const row of fuel.data ?? []) if (Number.isFinite(Number(row.meter_value))) rows.push({ value: Number(row.meter_value), source: "Abastecimento", at: row.occurred_at ?? null });
-      for (const row of orders.data ?? []) {
-        if (row.meter_at_open != null && Number.isFinite(Number(row.meter_at_open))) rows.push({ value: Number(row.meter_at_open), source: "Abertura de OS", at: row.opened_at ?? null });
-        if (row.meter_at_close != null && Number.isFinite(Number(row.meter_at_close))) rows.push({ value: Number(row.meter_at_close), source: "Fechamento de OS", at: row.closed_at ?? row.opened_at ?? null });
-      }
-      for (const row of tires.data ?? []) if (Number.isFinite(Number(row.meter_value))) rows.push({ value: Number(row.meter_value), source: "Evento de pneus", at: row.occurred_at ?? null });
+      if (fuel.data && Number.isFinite(Number(fuel.data.meter_value))) rows.push({ value: Number(fuel.data.meter_value), source: "Abastecimento", at: fuel.data.occurred_at ?? null });
+      if (orderOpen.data && Number.isFinite(Number(orderOpen.data.meter_at_open))) rows.push({ value: Number(orderOpen.data.meter_at_open), source: "Abertura de OS", at: orderOpen.data.opened_at ?? null });
+      if (orderClose.data && Number.isFinite(Number(orderClose.data.meter_at_close))) rows.push({ value: Number(orderClose.data.meter_at_close), source: "Fechamento de OS", at: orderClose.data.closed_at ?? orderClose.data.opened_at ?? null });
+      if (tires.data && Number.isFinite(Number(tires.data.meter_value))) rows.push({ value: Number(tires.data.meter_value), source: "Evento de pneus", at: tires.data.occurred_at ?? null });
       rows.sort((a, b) => b.value - a.value || (b.at ?? "").localeCompare(a.at ?? ""));
       if (alive) { setReading(rows[0] ?? null); setLoading(false); }
     })().catch(() => { if (alive) { setReading(null); setLoading(false); } });
