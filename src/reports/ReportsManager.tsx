@@ -3,8 +3,9 @@ import { AlertCircle, BarChart3, CalendarDays, Download, RefreshCw, Wallet } fro
 import {
   asNumber, buildCostBreakdown, buildVehicleCostRows, dateDaysAgo, dateEndExclusiveIso,
   dateStartIso, formatBrlCents, formatNumber, localDateInput, loadFleetAnalytics,
-  type FleetAnalyticsData
+  loadFuelConsumptionHistory, type FleetAnalyticsData
 } from "../lib/fleetAnalytics";
+import { calculateFuelConsumptionByVehicle } from "../domain/metrics";
 import "../fleetAnalytics.css";
 
 type Props = { organizationId: string };
@@ -44,6 +45,7 @@ export function ReportsManager({ organizationId }: Props) {
   const [appliedFrom, setAppliedFrom] = useState(() => dateDaysAgo(30));
   const [appliedTo, setAppliedTo] = useState(() => localDateInput());
   const [data, setData] = useState<FleetAnalyticsData>(emptyData);
+  const [fuelHistory, setFuelHistory] = useState<Awaited<ReturnType<typeof loadFuelConsumptionHistory>>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -55,8 +57,12 @@ export function ReportsManager({ organizationId }: Props) {
     setLoading(true);
     setError("");
     try {
-      const next = await loadFleetAnalytics(organizationId, startIso, endExclusiveIso);
+      const [next, history] = await Promise.all([
+        loadFleetAnalytics(organizationId, startIso, endExclusiveIso),
+        loadFuelConsumptionHistory(organizationId, endExclusiveIso)
+      ]);
       setData(next);
+      setFuelHistory(history);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível carregar os relatórios.");
     } finally {
@@ -73,6 +79,16 @@ export function ReportsManager({ organizationId }: Props) {
   const rangeData = useMemo(() => ({ ...data, workOrders: rangeWorkOrders }), [data, rangeWorkOrders]);
   const costs = useMemo(() => buildCostBreakdown(rangeData), [rangeData]);
   const vehicleRows = useMemo(() => buildVehicleCostRows(rangeData), [rangeData]);
+  const consumptionByVehicle = useMemo(
+    () => calculateFuelConsumptionByVehicle(data.vehicles, fuelHistory, startIso, endExclusiveIso),
+    [data.vehicles, fuelHistory, startIso, endExclusiveIso]
+  );
+  const fuelConsumptionRows = useMemo(
+    () => [...data.vehicles]
+      .map(vehicle => ({ vehicle, metric: consumptionByVehicle.get(vehicle.id) }))
+      .sort((a, b) => a.vehicle.description.localeCompare(b.vehicle.description, "pt-BR")),
+    [data.vehicles, consumptionByVehicle]
+  );
   const closedOrders = rangeWorkOrders.filter(order => order.status === "closed");
   const openOrders = rangeWorkOrders.filter(order => openOrderStatuses.has(order.status));
   const totalFuelLiters = data.fuelEvents.reduce((sum, row) => sum + asNumber(row.liters), 0);
@@ -176,6 +192,24 @@ export function ReportsManager({ organizationId }: Props) {
       <article className="fleet-kpi-card"><div className="fleet-kpi-head"><span>Manutenção concluída</span><span className="fleet-kpi-icon violet"><BarChart3 size={18}/></span></div><strong className="fleet-kpi-value">{loading ? "—" : formatBrlCents(costs.maintenanceCents)}</strong><small>{loading ? "—" : closedOrders.length + " ordem(ns) concluída(s)"}</small></article>
       <article className="fleet-kpi-card"><div className="fleet-kpi-head"><span>OS em aberto</span><span className="fleet-kpi-icon teal"><CalendarDays size={18}/></span></div><strong className="fleet-kpi-value">{loading ? "—" : formatNumber(openOrders.length, 0)}</strong><small>No período escolhido</small></article>
     </div>
+
+    <article className="fleet-panel">
+      <div className="fleet-panel-heading"><div><h3>Consumo médio por veículo / equipamento</h3><p>Calculado entre abastecimentos completos, somando abastecimentos parciais intermediários.</p></div></div>
+      <div className="fleet-table-wrap"><table className="fleet-table">
+        <thead><tr><th>Veículo / equipamento</th><th>Consumo médio</th><th>Ciclos válidos</th><th>Distância / horas</th><th>Litros considerados</th></tr></thead>
+        <tbody>
+          {fuelConsumptionRows.map(({vehicle, metric}) => <tr key={vehicle.id}>
+            <td><strong>{vehicle.description}</strong><small>{vehicle.plate || "Sem placa cadastrada"}</small></td>
+            <td><strong>{metric?.consumption == null ? "—" : formatNumber(metric.consumption, 2) + " " + metric.unit}</strong></td>
+            <td>{metric?.validIntervals ?? 0}</td>
+            <td>{metric ? formatNumber(metric.distanceOrHours) + (metric.unit === "km/l" ? " km" : " h") : "—"}</td>
+            <td>{metric ? formatNumber(metric.liters) + " L" : "—"}</td>
+          </tr>)}
+          {!loading && fuelConsumptionRows.length === 0 && <tr><td colSpan={5}>Nenhum veículo cadastrado.</td></tr>}
+        </tbody>
+      </table></div>
+      <p className="tire-footnote">A média só considera ciclos completos entre dois abastecimentos marcados como “Tanque cheio”. Intervalos com leitura ausente, decrescente ou distância/horas zero são descartados. O histórico anterior ao período é consultado para não distorcer o primeiro ciclo.</p>
+    </article>
 
     <div className="fleet-report-grid">
       <article className="fleet-panel">
