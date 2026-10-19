@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { VehicleManager } from "./vehicles/VehicleManager";
 import { FuelManager } from "./fuel/FuelManager";
@@ -46,7 +46,21 @@ function formatToday() {
 function App({ organizationId, organizationName, userEmail }: { organizationId?: string | null; organizationName?: string | null; userEmail?: string | null } = {}) {
   const userDisplayName = userEmail?.split("@")[0]?.replace(/[._-]+/g, " ") || "Usuário";
   const userInitials = userDisplayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "US";
-  const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
+  const [activeModule, setActiveModule] = useState<ModuleId>(() => {
+    try {
+      const saved = sessionStorage.getItem("fleetwise:activeModule");
+      return navigation.some((item) => item.id === saved) ? saved as ModuleId : "dashboard";
+    } catch {
+      return "dashboard";
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("fleetwise:activeModule", activeModule);
+    } catch {
+      // Navigation still works when browser storage is unavailable.
+    }
+  }, [activeModule]);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
   const activeItem = navigation.find((item) => item.id === activeModule)!;

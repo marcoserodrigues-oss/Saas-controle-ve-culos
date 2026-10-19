@@ -1,0 +1,58 @@
+name: Supabase Local QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-local-qa.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-local-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migration-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start isolated local Supabase database
+        run: supabase start --exclude studio,mailpit,storage-api,edge-runtime,logflare,vector,postgres-meta,imgproxy
+
+      - name: Reset local database and apply every migration
+        run: supabase db reset --local
+
+      - name: Run fuel authorization regression tests
+        run: supabase test db --local
+
+      - name: Install PostgreSQL client for concurrent-session QA
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Test concurrent fuel authorization settlements
+        run: |
+          supabase status -o env > /tmp/supabase-local.env
+          set -a
+          source /tmp/supabase-local.env
+          set +a
+          bash supabase/tests/fuel_authorization_concurrency.sh "$DB_URL"
+
+      - name: Verify the fuel authorization guard exists
+        run: |
+          supabase db lint --local --schema public
+          supabase db query --local "select 1 / (case when to_regprocedure('public.enforce_fuel_authorization_limits()') is not null then 1 else 0 end);"
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
