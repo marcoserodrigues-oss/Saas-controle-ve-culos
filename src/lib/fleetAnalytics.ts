@@ -306,3 +306,38 @@ export function buildCostBreakdown(data: FleetAnalyticsData): CostBreakdown {
     otherCents: data.standaloneExpenses.reduce((sum, row) => sum + asNumber(row.amount_cents), 0)
   };
 }
+
+
+export type FuelConsumptionHistoryRow = {
+  id: string;
+  vehicle_id: string;
+  occurred_at: string;
+  created_at: string | null;
+  meter_value: number | string | null;
+  liters: number | string;
+  fueling_kind: string;
+  status: string;
+};
+
+/**
+ * Loads the vehicle's complete fueling history through the selected report end date.
+ * Consumption needs the preceding full tank and any partial refills between full tanks,
+ * so filtering this query to the visible report period would produce misleading averages.
+ */
+export async function loadFuelConsumptionHistory(
+  organizationId: string,
+  endExclusiveIso: string
+): Promise<FuelConsumptionHistoryRow[]> {
+  if (!supabase) throw new Error("Banco de dados não configurado. Confira a conexão do Fleetwise.");
+  return fetchAllPages<FuelConsumptionHistoryRow>((from, to) => fetchPage<FuelConsumptionHistoryRow>(
+    supabase.from("fuel_events")
+      .select("id,vehicle_id,occurred_at,created_at,meter_value,liters,fueling_kind,status")
+      .eq("organization_id", organizationId)
+      .neq("status", "cancelled")
+      .lt("occurred_at", endExclusiveIso)
+      .order("occurred_at", { ascending: true })
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to)
+  ));
+}
