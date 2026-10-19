@@ -105,9 +105,11 @@ export function ReportsManager({ organizationId }: Props) {
   const openOrders = reportData.workOrders.filter(order => openOrderStatuses.has(order.status));
   const totalFuelLiters = reportData.fuelEvents.reduce((sum, row) => sum + asNumber(row.liters), 0);
   const totalCostCents = costs.fuelCents + costs.maintenanceCents + costs.tireCents + costs.otherCents;
-  const unassignedTireCost = reportData.tireEvents.filter(event => !event.vehicle_id).reduce((sum, event) => sum + asNumber(event.cost_cents), 0);
+  const unassignedTireCost = reportData.tireEvents.filter(event => event.event_type !== "purchase" && !event.vehicle_id).reduce((sum, event) => sum + asNumber(event.cost_cents), 0);
   const unassignedExpenseCost = reportData.standaloneExpenses.filter(expense => !expense.vehicle_id).reduce((sum, expense) => sum + asNumber(expense.amount_cents), 0);
   const unassignedCost = unassignedTireCost + unassignedExpenseCost;
+  // Valor atual de aquisição dos pneus em estoque; indicador informativo, fora dos custos operacionais.
+  const tireInventoryValue = data.tires.filter(tire => tire.status === "in_stock").reduce((sum, tire) => sum + asNumber(tire.purchase_cost_cents), 0);
 
   const monthlyRows = useMemo(() => {
     const months = new Map<string, MonthlyCost>();
@@ -127,6 +129,8 @@ export function ReportsManager({ organizationId }: Props) {
       if (bucket) bucket.maintenanceCents += asNumber(row.labor_cost_cents) + asNumber(row.parts_cost_cents);
     }
     for (const row of reportData.tireEvents) {
+      // Compra/cadastro inicial é valor de estoque, não custo operacional do período.
+      if (row.event_type === "purchase") continue;
       const bucket = ensure(row.occurred_at);
       if (bucket) bucket.tireCents += asNumber(row.cost_cents);
     }
@@ -252,7 +256,8 @@ export function ReportsManager({ organizationId }: Props) {
           <div className="fleet-cost-label"><span>{label}</span><strong>{loading ? "—" : formatBrlCents(value)}</strong></div>
           <div className="fleet-bar-track"><span className={"fleet-bar-fill " + tone} style={{ width: (loading ? 0 : totalCostCents > 0 ? value / totalCostCents * 100 : 0) + "%" }}/></div>
         </div>)}
-        <div className="fleet-section-footer"><span>Sem veículo associado</span><strong>{loading ? "—" : formatBrlCents(unassignedCost)}</strong></div>
+        <div className="fleet-section-footer"><span>Sem veículo associado (custos operacionais)</span><strong>{loading ? "—" : formatBrlCents(unassignedCost)}</strong></div>
+        <div className="fleet-section-footer"><span>Valor dos pneus atualmente em estoque <small>(fora dos custos operacionais)</small></span><strong>{loading ? "—" : formatBrlCents(tireInventoryValue)}</strong></div>
       </article>
     </div>
 
