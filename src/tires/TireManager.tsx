@@ -146,6 +146,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [notice, setNotice] = useState("");
   const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life" | "layout">("inventory");
   const [search, setSearch] = useState("");
+  const [reportVehicleId, setReportVehicleId] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showTireForm, setShowTireForm] = useState(false);
   const [editingTireId, setEditingTireId] = useState<string | null>(null);
@@ -213,17 +214,19 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
       const place = latestPlacement.get(t.id);
       const vehicle = place?.vehicle_id ? vehicleMap.get(place.vehicle_id) : null;
+      if (reportVehicleId && place?.vehicle_id !== reportVehicleId) return false;
       return !term || [t.serial_number,t.brand ?? "",t.model ?? "",t.size,vehicle?.description ?? "",vehicle?.plate ?? ""].some(v => v.toLocaleLowerCase("pt-BR").includes(term));
     });
-  }, [tires,search,statusFilter,latestPlacement,vehicleMap]);
+  }, [tires,search,statusFilter,reportVehicleId,latestPlacement,vehicleMap]);
   const filteredEvents = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return events.filter(e => {
       const t = tireMap.get(e.tire_id);
       const v = e.vehicle_id ? vehicleMap.get(e.vehicle_id) : null;
+      if (reportVehicleId && e.vehicle_id !== reportVehicleId) return false;
       return !term || [t?.serial_number ?? "",t?.size ?? "",v?.description ?? "",v?.plate ?? "",eventLabels[e.event_type],e.reason ?? "",e.notes ?? ""].some(x => x.toLocaleLowerCase("pt-BR").includes(term));
     });
-  }, [events,search,tireMap,vehicleMap]);
+  }, [events,search,reportVehicleId,tireMap,vehicleMap]);
 
   const startNewTire = () => { setEditingTireId(null); setTireForm(emptyTire()); setShowTireForm(true); setError(""); setNotice(""); };
   const startEditTire = (t: Tire) => {
@@ -600,6 +603,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     </div>
     <div className="tire-list-toolbar">
       <label className="tire-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "history" ? "Buscar pneu, veículo ou evento..." : tab === "life" ? "Buscar no relatório de vida útil..." : "Buscar série, medida ou veículo..."}/></label>
+      {(tab === "history" || tab === "life") && <select value={reportVehicleId} onChange={e => setReportVehicleId(e.target.value)} aria-label="Filtrar relatório por veículo"><option value="">Todos os veículos</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : ""}</option>)}</select>}
       {(tab === "inventory" || tab === "life") && <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filtrar por status"><option value="all">Todos os status</option>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>}
       {tab === "positions" && <button className="primary-button" onClick={() => {setPositionForm({vehicle_id:vehicles[0]?.id ?? "",position_code:"",position_label:""});setShowPositionForm(true);setError("");}}><Plus size={16}/> Nova posição</button>}
     </div>
