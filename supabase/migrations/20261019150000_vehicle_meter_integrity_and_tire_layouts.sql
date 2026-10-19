@@ -44,8 +44,8 @@ declare
   v_close numeric;
 begin
   if tg_table_name = 'fuel_events' then
-    if tg_op = 'UPDATE' and new.vehicle_id is not distinct from old.vehicle_id and new.meter_value is not distinct from old.meter_value then return new; end if;
     if new.status = 'cancelled' then return new; end if;
+    if tg_op = 'UPDATE' and new.vehicle_id is not distinct from old.vehicle_id and new.meter_value is not distinct from old.meter_value and new.status is not distinct from old.status then return new; end if;
     v_org := new.organization_id; v_vehicle := new.vehicle_id; v_reading := new.meter_value;
   elsif tg_table_name = 'tire_events' then
     if tg_op = 'UPDATE' and new.vehicle_id is not distinct from old.vehicle_id and new.meter_value is not distinct from old.meter_value then return new; end if;
@@ -136,3 +136,16 @@ where code='car-4-tires' and (layout is null or jsonb_array_length(layout)=0);
 update public.tire_layout_templates
 set layout = '[{"code":"F1","label":"Dianteiro esquerdo","axle":1,"side":"left","slot":"outer","x":30,"y":25},{"code":"F2","label":"Dianteiro direito","axle":1,"side":"right","slot":"outer","x":70,"y":25},{"code":"R1","label":"Traseiro esquerdo","axle":2,"side":"left","slot":"outer","x":30,"y":70},{"code":"R2","label":"Traseiro direito","axle":2,"side":"right","slot":"outer","x":70,"y":70}]'::jsonb
 where code='pickup-4-tires' and (layout is null or jsonb_array_length(layout)=0);
+
+-- Create missing positions for vehicles already linked to a template, without deleting existing positions.
+insert into public.vehicle_tire_positions (organization_id, vehicle_id, position_code, position_label, is_active)
+select v.organization_id, v.id, p->>'code', p->>'label', true
+from public.vehicles v
+join public.tire_layout_templates t on t.id = v.tire_layout_template_id
+cross join lateral jsonb_array_elements(t.layout) as p
+where not exists (
+  select 1 from public.vehicle_tire_positions existing
+  where existing.organization_id = v.organization_id
+    and existing.vehicle_id = v.id
+    and lower(existing.position_code) = lower(p->>'code')
+);
