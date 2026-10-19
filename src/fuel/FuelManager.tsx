@@ -4,8 +4,9 @@ import { AlertCircle, CheckCircle2, FileText, Fuel, Pencil, Plus, RefreshCw, Sea
 import { FuelAuthorizationsManager } from "./FuelAuthorizationsManager";
 import { authorizationWorkflowStatus, isAuthorizationPendingSettlement } from "./fuelAuthorizationUtils";
 import { supabase } from "../lib/supabase";
+import { VehicleMeterReference } from "../lib/VehicleMeterReference";
 
-type Vehicle = { id: string; code: string; plate: string | null; description: string; meter_kind: string; fuel_type: string; status: string };
+type Vehicle = { id: string; code: string; plate: string | null; description: string; meter_kind: string; initial_meter: number | null; fuel_type: string; status: string };
 type Driver = { id: string; name: string; status: string };
 type Supplier = { id: string; name: string; status: string };
 type AuthorizationRow = { id: string; authorization_code: string; vehicle_id: string; driver_id: string | null; supplier_id: string | null; valid_from: string; valid_until: string; max_liters: number | string | null; max_amount_cents: number | string | null; status: string; consumed_liters: number | string; consumed_amount_cents: number | string };
@@ -40,7 +41,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     if (!supabase) { setError("Banco de dados não configurado."); setLoading(false); return; }
     setLoading(true);
     const [v,d,s,f] = await Promise.all([
-      supabase.from("vehicles").select("id,code,plate,description,meter_kind,fuel_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("description"),
+      supabase.from("vehicles").select("id,code,plate,description,meter_kind,initial_meter,fuel_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("description"),
       supabase.from("drivers").select("id,name,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
       supabase.from("suppliers").select("id,name,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
       supabase.from("fuel_events").select("id,vehicle_id,driver_id,supplier_id,authorization_id,occurred_at,meter_value,liters,unit_price_cents,total_cents,fueling_kind,document_number,notes,status").eq("organization_id",organizationId).neq("status","cancelled").order("occurred_at",{ascending:false}).limit(500)
@@ -242,6 +243,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:13}}>
         {entryMode==="settlement"&&<label style={field}>Autorização em aberto *<select required style={input} value={form.authorization_id} onChange={e=>chooseAuthorization(e.target.value)}><option value="" disabled>Selecione a autorização a dar baixa</option>{authorizationOptions.map(a=>{const v=vehicleMap.get(a.vehicle_id);const state=authorizationWorkflowStatus(a.status,a.valid_from,a.valid_until,a.consumed_liters).label;return <option key={a.id} value={a.id}>{a.authorization_code} · {v?.plate??v?.description??"Ativo"} · {state}</option>;})}</select><small style={{color:"#64748b"}}>Escolha a autorização devolvida pelo motorista. O ativo e os dados fixos serão preenchidos automaticamente.</small></label>}
         <label style={field}>Veículo/equipamento *<select required style={input} value={form.vehicle_id} disabled={entryMode==="settlement"||Boolean(selectedAuthorization)} onChange={e=>set("vehicle_id",e.target.value)}><option value="">{entryMode==="settlement"?"Preenchido pela autorização":"Selecione"}</option>{vehicles.filter(v=>v.status==="active"||v.id===form.vehicle_id).map(v=><option key={v.id} value={v.id}>{v.code} · {v.plate? v.plate+" · ":""}{v.description}</option>)}</select></label>
+        <VehicleMeterReference organizationId={organizationId} vehicleId={form.vehicle_id} meterKind={vehicleMap.get(form.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(form.vehicle_id)?.initial_meter}/>
         <label style={field}>Data e hora *<input required type="datetime-local" max={localDateTimePart()} style={input} value={form.occurred_at} onChange={e=>set("occurred_at",e.target.value)}/></label>
         <label style={field}>{vehicleMap.get(form.vehicle_id)?.meter_kind==="hourmeter"?"Horímetro (h) *":"Odômetro (km) *"}<input required type="number" min="0" step="0.1" style={input} value={form.meter_value} onChange={e=>set("meter_value",e.target.value)}/></label>
         <label style={field}>Combustível<input readOnly style={{...input,background:"#f8fafc"}} value={labels[vehicleMap.get(form.vehicle_id)?.fuel_type??""]??"Conforme cadastro do ativo"}/></label>
