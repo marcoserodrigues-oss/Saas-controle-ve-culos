@@ -121,7 +121,7 @@ export function ReportsManager({ organizationId }: Props) {
       const bucket = ensure(row.occurred_at);
       if (bucket) bucket.fuelCents += row.total_cents === null ? Math.round(asNumber(row.liters) * asNumber(row.unit_price_cents)) : asNumber(row.total_cents);
     }
-    for (const row of rangeWorkOrders) {
+    for (const row of reportData.workOrders) {
       if (row.status !== "closed") continue;
       const bucket = ensure(row.closed_at ?? row.opened_at);
       if (bucket) bucket.maintenanceCents += asNumber(row.labor_cost_cents) + asNumber(row.parts_cost_cents);
