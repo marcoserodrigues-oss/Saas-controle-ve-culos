@@ -109,15 +109,15 @@ end;
 $$;
 
 drop trigger if exists validate_fuel_event_meter on public.fuel_events;
-create trigger validate_fuel_event_meter before insert or update of vehicle_id, meter_value, status on public.fuel_events
+create trigger validate_fuel_event_meter before insert or update on public.fuel_events
 for each row execute function public.validate_vehicle_meter_monotonic();
 
 drop trigger if exists validate_work_order_meter on public.work_orders;
-create trigger validate_work_order_meter before insert or update of vehicle_id, meter_at_open, meter_at_close on public.work_orders
+create trigger validate_work_order_meter before insert or update on public.work_orders
 for each row execute function public.validate_vehicle_meter_monotonic();
 
 drop trigger if exists validate_tire_event_meter on public.tire_events;
-create trigger validate_tire_event_meter before insert or update of vehicle_id, meter_value on public.tire_events
+create trigger validate_tire_event_meter before insert or update on public.tire_events
 for each row execute function public.validate_vehicle_meter_monotonic();
 
 -- Restore complete position maps for the built-in templates; coordinates use a 0..100 canvas.
