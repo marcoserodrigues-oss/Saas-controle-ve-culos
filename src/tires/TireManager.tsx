@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
-import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, History, Settings2, Truck } from "lucide-react";
+import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, History, Settings2, Truck, Trash2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { nextSequentialCode } from "../lib/automaticCode";
 import { calculateTireLifecycleReport } from "./tireLifecycle";
@@ -18,6 +18,8 @@ type TireEvent = { id: string; tire_id: string; vehicle_id: string | null; posit
 type TireForm = { serial_number: string; brand: string; model: string; size: string; purchase_date: string; purchase_cost: string };
 type EventForm = { tire_id: string; event_type: EventType; occurred_at: string; vehicle_id: string; position_id: string; meter_value: string; cost: string; supplier_id: string; reason: string; notes: string; target_status: TireStatus };
 type PositionForm = { vehicle_id: string; position_code: string; position_label: string };
+type TireDecision = { mode: "replace" | "trash"; draggedTireId: string; positionId: string | null; occupantTireId: string };
+type TireWorkflow = { mode: "replace" | "trash"; action: "stock" | "scrap"; oldTireId: string; newTireId: string | null; positionId: string | null; stage: "dismount" | "scrap" | "mount" };
 
 const localDatePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,10);
 const localDateTimePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,16);
@@ -137,6 +139,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [layoutVehicleId, setLayoutVehicleId] = useState("");
   const [selectedLayoutTemplateId, setSelectedLayoutTemplateId] = useState("");
   const [layoutMoveTarget, setLayoutMoveTarget] = useState<string | null>(null);
+  const [tireDecision, setTireDecision] = useState<TireDecision | null>(null);
+  const [tireWorkflow, setTireWorkflow] = useState<TireWorkflow | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [events, setEvents] = useState<TireEvent[]>([]);
@@ -315,6 +319,68 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   }
 
 
+  function beginTireWorkflow(decision: TireDecision, action: "stock" | "scrap") {
+    const oldTire = tireMap.get(decision.occupantTireId);
+    if (!oldTire) { setError("Não foi possível localizar o pneu que ocupa a posição."); setTireDecision(null); return; }
+    const newTireId = decision.mode === "replace" ? decision.draggedTireId : null;
+    if (oldTire.status === "mounted") {
+      setTireWorkflow({ mode: decision.mode, action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage: "dismount" });
+      const place = latestPlacement.get(oldTire.id);
+      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: "dismount", vehicle_id: place?.vehicle_id ?? "", position_id: place?.position_id ?? "", reason: decision.mode === "replace" ? "Substituição pelo layout visual" : "Retirada pelo layout visual" });
+      setLayoutMoveTarget(null);
+      setShowEventForm(true);
+      setTireDecision(null);
+      setError("");
+      setNotice("Primeiro confirme a desmontagem do pneu atual. O sistema continuará a operação após cada etapa.");
+      return;
+    }
+    if (action === "scrap") {
+      setTireWorkflow({ mode: decision.mode, action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage: "scrap" });
+      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: "scrap", reason: "Descarte pelo layout visual" });
+      setLayoutMoveTarget(null);
+      setShowEventForm(true);
+      setTireDecision(null);
+      setError("");
+      return;
+    }
+    if (newTireId && decision.positionId) {
+      setTireWorkflow({ mode: "replace", action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage: "mount" });
+      setEventForm({ ...emptyEvent(), tire_id: newTireId, event_type: "mount", vehicle_id: layoutVehicle?.id ?? "", position_id: decision.positionId, reason: "Montagem pelo layout visual após retorno do pneu anterior ao estoque" });
+      setLayoutMoveTarget(decision.positionId);
+      setShowEventForm(true);
+      setTireDecision(null);
+      setError("");
+      return;
+    }
+    setTireDecision(null);
+  }
+
+  function continueTireWorkflowAfterSave() {
+    const flow = tireWorkflow;
+    if (!flow) return;
+    if (flow.stage === "dismount" && flow.action === "scrap") {
+      setTireWorkflow({ ...flow, stage: "scrap" });
+      setEventForm({ ...emptyEvent(), tire_id: flow.oldTireId, event_type: "scrap", reason: "Descarte pelo layout visual" });
+      setLayoutMoveTarget(null);
+      setShowEventForm(true);
+      setNotice("Desmontagem registrada. Confirme agora o descarte do pneu antigo.");
+      return;
+    }
+    if ((flow.stage === "dismount" && flow.action === "stock" && flow.newTireId) || (flow.stage === "scrap" && flow.newTireId)) {
+      const nextFlow = { ...flow, stage: "mount" as const };
+      setTireWorkflow(nextFlow);
+      setEventForm({ ...emptyEvent(), tire_id: flow.newTireId!, event_type: "mount", vehicle_id: layoutVehicle?.id ?? "", position_id: flow.positionId ?? "", reason: "Montagem pelo layout visual após substituição" });
+      setLayoutMoveTarget(flow.positionId);
+      setShowEventForm(true);
+      setNotice(flow.stage === "scrap" ? "Descarte registrado. Confirme agora a montagem do pneu novo." : "Pneu antigo devolvido ao estoque. Confirme agora a montagem do pneu novo.");
+      return;
+    }
+    setTireWorkflow(null);
+    setShowEventForm(false);
+    setLayoutMoveTarget(null);
+    setNotice(flow.stage === "mount" ? "Substituição concluída e histórico atualizado." : flow.action === "scrap" ? "Pneu desmontado e descartado. Histórico preservado." : "Pneu desmontado e devolvido ao estoque.");
+  }
+
   async function applyLayoutTemplate() {
     if (!supabase || saving || !layoutVehicle || !selectedLayoutTemplate) return;
     if (selectedLayoutTemplate.asset_kind !== layoutVehicle.kind) {
@@ -365,7 +431,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     }
     const occupantId = mountedTiresAtPosition.get(position.id);
     if (occupantId && tire.status === "in_stock") {
-      setError("A posição está ocupada. Para fazer um rodízio, arraste um pneu que já esteja montado para essa posição; o sistema fará a troca dos dois pneus.");
+      setTireDecision({ mode: "replace", draggedTireId: tire.id, positionId: position.id, occupantTireId: occupantId });
+      setError("");
+      setNotice("");
       return;
     }
     if (occupantId === tire.id) {
@@ -429,8 +497,10 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes de registrar o envio para reparo."); return; }
       nextStatus = "repair";
     } else if (kind === "scrap") {
-      if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes do descarte."); return; }
-      if (!window.confirm("Confirmar o descarte permanente deste pneu? O histórico será preservado.")) return;
+      if (oldStatus === "mounted") { setError("Desmonte o pneu antes do descarte."); return; }
+      if (["scrapped","sold"].includes(oldStatus)) { setError("Este pneu já está descartado ou vendido."); return; }
+      if (!eventForm.reason.trim()) { setError("Informe o motivo do descarte."); return; }
+      if (!window.confirm("Confirmar o descarte do pneu " + tire.serial_number + "?\nMotivo: " + eventForm.reason.trim() + "\nO histórico será preservado.")) return;
       nextStatus = "scrapped";
     } else if (kind === "inspection") {
       vehicleId = vehiclePlacement?.vehicle_id ?? (eventForm.vehicle_id || null); positionId = vehiclePlacement?.position_id ?? (eventForm.position_id || null);
@@ -471,10 +541,15 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           : "Não foi possível movimentar o pneu pelo desenho. " + (serverMessage ? serverMessage : "Confira a posição e tente novamente."));
       } else {
         const action = (movement.data as {action?:string}).action;
-        setShowEventForm(false);
-        setLayoutMoveTarget(null);
-        setNotice(action === "swap" ? "Rodízio/troca de posições registrado no histórico dos dois pneus." : action === "mount" ? "Pneu montado na posição selecionada." : "Movimentação do pneu registrada.");
-        await load();
+        if (tireWorkflow?.stage === "mount") {
+          await load();
+          continueTireWorkflowAfterSave();
+        } else {
+          setShowEventForm(false);
+          setLayoutMoveTarget(null);
+          setNotice(action === "swap" ? "Rodízio/troca de posições registrado no histórico dos dois pneus." : action === "mount" ? "Pneu montado na posição selecionada." : "Movimentação do pneu registrada.");
+          await load();
+        }
       }
       setSaving(false);
       return;
@@ -485,10 +560,16 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       setError("Não foi possível salvar o evento. Nenhum sucesso foi confirmado pelo banco.");
     } else {
       const updated = nextStatus === oldStatus ? {error:null,data:{id:tire.id}} : await supabase.from("tires").update({status:nextStatus}).eq("id",tire.id).eq("organization_id",organizationId).select("id").maybeSingle();
-      setShowEventForm(false);
-      if (updated.error || !updated.data) setError("O evento foi salvo no histórico, mas não foi possível atualizar o status do pneu. Atualize a tela e confira o item.");
-      else setNotice("Evento registrado no histórico do pneu.");
-      await load();
+      if (updated.error || !updated.data) {
+        setError("O evento foi salvo no histórico, mas não foi possível atualizar o status do pneu. Atualize a tela e confira o item.");
+      } else if (tireWorkflow && ((tireWorkflow.stage === "dismount" && kind === "dismount") || (tireWorkflow.stage === "scrap" && kind === "scrap"))) {
+        await load();
+        continueTireWorkflowAfterSave();
+      } else {
+        setShowEventForm(false);
+        setNotice("Evento registrado no histórico do pneu.");
+        await load();
+      }
     }
     setSaving(false);
   }
