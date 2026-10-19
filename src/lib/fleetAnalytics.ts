@@ -283,6 +283,8 @@ export function buildVehicleCostRows(data: FleetAnalyticsData): VehicleCostRow[]
     if (bucket) bucket.maintenanceCents += workOrderCostCents(row);
   }
   for (const row of data.tireEvents) {
+    // A compra/cadastro inicial representa estoque, não custo operacional de um veículo.
+    if (row.event_type === "purchase") continue;
     const bucket = ensureVehicle(row.vehicle_id);
     if (bucket) bucket.tireCents += tireEventCostCents(row);
   }
@@ -302,7 +304,8 @@ export function buildCostBreakdown(data: FleetAnalyticsData): CostBreakdown {
   return {
     fuelCents: data.fuelEvents.reduce((sum, row) => sum + fuelCostCents(row), 0),
     maintenanceCents: data.workOrders.filter(row => row.status === "closed").reduce((sum, row) => sum + workOrderCostCents(row), 0),
-    tireCents: data.tireEvents.reduce((sum, row) => sum + tireEventCostCents(row), 0),
+    // Exclui compra/cadastro inicial: o valor permanece no inventário de pneus em estoque.
+    tireCents: data.tireEvents.filter(row => row.event_type !== "purchase").reduce((sum, row) => sum + tireEventCostCents(row), 0),
     otherCents: data.standaloneExpenses.reduce((sum, row) => sum + asNumber(row.amount_cents), 0)
   };
 }
