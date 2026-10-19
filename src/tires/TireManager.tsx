@@ -399,6 +399,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     const meter = eventForm.meter_value.trim() === "" ? null : Number(eventForm.meter_value);
     const cost = toCents(eventForm.cost);
     if (!eventForm.occurred_at || new Date(eventForm.occurred_at).getTime() > Date.now()) { setError("Informe uma data/hora válida, sem lançamento futuro."); return; }
+    if (eventForm.vehicle_id && meter === null) { setError("Informe a leitura atual do hodômetro/horímetro para vincular este evento ao veículo."); return; }
     if (meter !== null && (!Number.isFinite(meter) || meter < 0)) { setError("A leitura do hodômetro/horímetro deve ser zero ou maior."); return; }
     if (!Number.isFinite(cost) || cost < 0) { setError("O custo do evento não pode ser negativo."); return; }
     if (eventForm.supplier_id && !suppliers.some(s => s.id === eventForm.supplier_id)) { setError("O fornecedor selecionado não pertence à organização."); return; }
