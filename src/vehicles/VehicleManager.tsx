@@ -18,6 +18,25 @@ type VehicleRecord = {
 
 const emptyForm = { code: "", description: "", plate: "", vin: "", kind: "vehicle" as VehicleKind, meter_kind: "odometer" as MeterKind, fuel_type: "diesel" as FuelType, make: "", model: "", model_year: "", tire_layout_template_id: "" };
 
+type VehicleDraft = { organizationId: string; form: typeof emptyForm; showForm: boolean; editingId: string | null };
+
+function readVehicleDraft(organizationId: string): VehicleDraft | null {
+  try {
+    const raw = sessionStorage.getItem("fleetwise:vehicle-draft:" + organizationId);
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as VehicleDraft;
+    if (
+      draft.organizationId !== organizationId ||
+      typeof draft.showForm !== "boolean" ||
+      !draft.form ||
+      typeof draft.form.description !== "string"
+    ) return null;
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
 
 async function syncLayoutPositions(organizationId: string, vehicleId: string, template: LayoutTemplate) {
   if (!supabase) throw new Error("Banco de dados não configurado.");
@@ -81,9 +100,23 @@ async function generateVehicleCode(organizationId: string, prefix: "VEI" | "EQP"
 export function VehicleManager({ organizationId }: { organizationId: string }) {
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [layoutTemplates, setLayoutTemplates] = useState<LayoutTemplate[]>([]);
-  const [form, setForm] = useState(emptyForm);
-  const [showForm, setShowForm] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [initialDraft] = useState(() => readVehicleDraft(organizationId));
+  const [form, setForm] = useState(initialDraft?.form ?? emptyForm);
+  const [showForm, setShowForm] = useState(initialDraft?.showForm ?? false);
+  const [editingId, setEditingId] = useState<string | null>(initialDraft?.editingId ?? null);
+
+  useEffect(() => {
+    const storageKey = "fleetwise:vehicle-draft:" + organizationId;
+    try {
+      if (showForm) {
+        sessionStorage.setItem(storageKey, JSON.stringify({ organizationId, form, showForm, editingId }));
+      } else {
+        sessionStorage.removeItem(storageKey);
+      }
+    } catch {
+      // Saving to the database remains available if browser storage is unavailable.
+    }
+  }, [organizationId, form, showForm, editingId]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
