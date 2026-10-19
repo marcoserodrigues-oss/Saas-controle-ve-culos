@@ -32,6 +32,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
   const [search,setSearch] = useState("");
+  const [reportVehicleId,setReportVehicleId] = useState("");
   const [days,setDays] = useState("30");
   const [error,setError] = useState("");
   const [notice,setNotice] = useState("");
@@ -100,11 +101,12 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return rows.filter(r=>{
       if(new Date(r.occurred_at).getTime()<cutoff) return false;
+      if(reportVehicleId && r.vehicle_id !== reportVehicleId) return false;
       if(!term) return true;
       const v=vehicleMap.get(r.vehicle_id);
       return [v?.description,v?.plate,v?.code,driverMap.get(r.driver_id??""),supplierMap.get(r.supplier_id??""),r.document_number,authorizationMap.get(r.authorization_id??"")?.authorization_code].some(x=>x?.toLocaleLowerCase("pt-BR").includes(term));
     });
-  },[rows,days,search,vehicleMap,driverMap,supplierMap,authorizationMap]);
+  },[rows,days,search,reportVehicleId,vehicleMap,driverMap,supplierMap,authorizationMap]);
   const liters = visible.reduce((a,r)=>a+num(r.liters),0);
   const cents = visible.reduce((a,r)=>a+num(r.total_cents ?? Math.round(num(r.liters)*num(r.unit_price_cents))),0);
   const set = (key:keyof FormValues,value:string)=>setForm(old=>({...old,[key]:value}));
@@ -263,6 +265,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     </div>
     <div style={{...panel,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
       <label style={{...field,flex:"1 1 260px",position:"relative"}}><span style={{display:"flex",gap:7,alignItems:"center"}}><Search size={15}/> Buscar registros</span><input style={input} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Veículo, placa, motorista, posto, documento"/></label>
+      <label style={field}>Veículo / equipamento<select style={input} value={reportVehicleId} onChange={e=>setReportVehicleId(e.target.value)}><option value="">Todos os veículos</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · "+v.plate : ""}</option>)}</select></label>
       <label style={field}>Período<select style={input} value={days} onChange={e=>setDays(e.target.value)}><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">12 meses</option><option value="all">Todo o histórico carregado</option></select></label>
     </div>
     {loading?<div style={panel}>Carregando abastecimentos…</div>:visible.length===0?<div style={{...panel,textAlign:"center",padding:36}}><Fuel size={25}/><h3>{rows.length?"Nenhum resultado encontrado":"Nenhum abastecimento registrado"}</h3><p style={{color:"#7d899b",fontSize:12}}>{rows.length?"Ajuste o período ou a busca.":"Registre um abastecimento para começar a gerar indicadores reais."}</p></div>:<div style={{...panel,overflowX:"auto",padding:0}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:850}}><thead><tr>{["Data","Veículo","Leitura","Litros","Preço/L","Total","Motorista / posto","Tipo","Ações"].map(t=><th key={t} style={{padding:12,textAlign:"left",background:"#f8fafc",color:"#64748b",whiteSpace:"nowrap"}}>{t}</th>)}</tr></thead><tbody>{visible.map(r=>{const v=vehicleMap.get(r.vehicle_id);return <tr key={r.id} style={{borderTop:"1px solid #edf0f5"}}><td style={{padding:12,whiteSpace:"nowrap"}}>{dateLabel(r.occurred_at)}<small style={{display:"block",color:"#94a3b8"}}>{r.document_number||"Sem documento"}</small>{r.authorization_id&&authorizationMap.get(r.authorization_id)&&<small style={{display:"block",color:"#1d4ed8"}}>{authorizationMap.get(r.authorization_id)?.authorization_code}</small>}</td><td style={{padding:12}}><strong>{v?.description??"Ativo não encontrado"}</strong><small style={{display:"block",color:"#94a3b8"}}>{v?.plate??v?.code??"—"}</small></td><td style={{padding:12}}>{num(r.meter_value).toLocaleString("pt-BR")}<small style={{display:"block",color:"#94a3b8"}}>{v?.meter_kind==="hourmeter"?"h":"km"}</small></td><td style={{padding:12}}>{num(r.liters).toLocaleString("pt-BR",{maximumFractionDigits:2})} L</td><td style={{padding:12}}>{brl(num(r.unit_price_cents))}</td><td style={{padding:12}}><strong>{brl(num(r.total_cents??Math.round(num(r.liters)*num(r.unit_price_cents))))}</strong></td><td style={{padding:12}}>{driverMap.get(r.driver_id??"")??"—"}<small style={{display:"block",color:"#94a3b8"}}>{supplierMap.get(r.supplier_id??"")??"Posto não informado"}</small></td><td style={{padding:12}}>{r.fueling_kind==="full"?"Tanque cheio":"Parcial"}</td><td style={{padding:12,whiteSpace:"nowrap"}}><button style={mutedButton} aria-label="Editar abastecimento" onClick={()=>edit(r)}><Pencil size={14}/></button> <button style={{...mutedButton,color:"#b42318"}} aria-label="Cancelar abastecimento" onClick={()=>void cancel(r)}><X size={14}/></button></td></tr>})}</tbody></table></div>}
