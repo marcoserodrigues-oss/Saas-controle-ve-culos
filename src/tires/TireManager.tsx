@@ -214,10 +214,10 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
       const place = latestPlacement.get(t.id);
       const vehicle = place?.vehicle_id ? vehicleMap.get(place.vehicle_id) : null;
-      if (reportVehicleId && place?.vehicle_id !== reportVehicleId) return false;
+      if (reportVehicleId && place?.vehicle_id !== reportVehicleId && !events.some(event => event.tire_id === t.id && event.vehicle_id === reportVehicleId)) return false;
       return !term || [t.serial_number,t.brand ?? "",t.model ?? "",t.size,vehicle?.description ?? "",vehicle?.plate ?? ""].some(v => v.toLocaleLowerCase("pt-BR").includes(term));
     });
-  }, [tires,search,statusFilter,reportVehicleId,latestPlacement,vehicleMap]);
+  }, [tires,search,statusFilter,reportVehicleId,latestPlacement,vehicleMap,events]);
   const filteredEvents = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return events.filter(e => {
