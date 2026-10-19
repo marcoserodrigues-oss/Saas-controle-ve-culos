@@ -96,7 +96,7 @@ export function ReportsManager({ organizationId }: Props) {
     [reportData.vehicles, fuelHistory, startIso, endExclusiveIso]
   );
   const fuelConsumptionRows = useMemo(
-    () => [...data.vehicles]
+    () => [...reportData.vehicles]
       .map(vehicle => ({ vehicle, metric: consumptionByVehicle.get(vehicle.id) }))
       .sort((a, b) => a.vehicle.description.localeCompare(b.vehicle.description, "pt-BR")),
     [reportData.vehicles, consumptionByVehicle]
