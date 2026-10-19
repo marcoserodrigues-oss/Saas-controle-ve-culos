@@ -775,7 +775,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                   </button>;
                 })}
                 <div className="tire-diagram-legend"><span><i className="legend-occupied"/> Pneu montado</span><span><i className="legend-empty"/> Posição vazia</span><span><i className="legend-inactive"/> Posição inativa</span></div>
-                <div className="tire-discard-dropzone" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
+                <div className="tire-discard-dropzone" style={{display:"flex",alignItems:"center",gap:12,marginTop:14,padding:"12px 14px",border:"2px dashed #dc6262",borderRadius:12,background:"rgba(220,98,98,0.08)",color:"var(--text-primary, inherit)",cursor:layoutReady?"pointer":"not-allowed"}} onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
                   e.preventDefault();
                   e.stopPropagation();
                   const tireId = e.dataTransfer.getData("text/plain");
@@ -853,7 +853,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       <div className="vehicle-form-actions tire-decision-actions">
         <button type="button" className="secondary-button" onClick={() => setTireDecision(null)}>Cancelar operação</button>
         <button type="button" className="secondary-button" disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "stock")}><Truck size={16}/> {tireDecision.mode === "replace" ? "Voltar ao estoque e montar novo" : "Voltar ao estoque"}</button>
-        <button type="button" className="danger-button" disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "scrap")}><Trash2 size={16}/> Descartar pneu</button>
+        <button type="button" className="secondary-button" style={{borderColor:"#c83e3e",color:"#c83e3e"}} disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "scrap")}><Trash2 size={16}/> Descartar pneu</button>
       </div>
     </section></div>}
 
