@@ -193,7 +193,9 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     if(result.error){
       setError(result.error.code==="23505" && form.authorization_id
         ? "Esta autorização já recebeu baixa em outro lançamento. Atualize a lista e confira o histórico."
-        : "Não foi possível salvar o abastecimento. Confira os campos e suas permissões.");
+        : result.error.code==="23514"
+          ? result.error.message
+          : "Não foi possível salvar o abastecimento. Confira os campos e suas permissões.");
     } else if(!result.data)setError("O banco não confirmou a gravação. Atualize a lista e tente novamente.");
     else {
       setNotice(editing
