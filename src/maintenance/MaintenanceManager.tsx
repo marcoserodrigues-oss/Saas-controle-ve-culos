@@ -71,7 +71,7 @@ export function MaintenanceManager({organizationId}:{organizationId:string}) {
   let codeGenerationFailed=false;
   if(editO){
    const result=await supabase.from("work_orders").update(payload).eq("id",editO).eq("organization_id",organizationId).select("id").maybeSingle();
-   if(result.error||!result.data)saveMessage="Não foi possível salvar a ordem. Nenhuma gravação foi confirmada.";
+   if(result.error?.code==="23514")saveMessage=result.error.message;else if(result.error||!result.data)saveMessage="Não foi possível salvar a ordem. Nenhuma gravação foi confirmada.";
    else saved=true;
   }else{
    for(let attempt=0;attempt<5;attempt++){
@@ -79,7 +79,7 @@ export function MaintenanceManager({organizationId}:{organizationId:string}) {
     try{orderNumber=await generateWorkOrderNumber(organizationId)}catch{codeGenerationFailed=true;break}
     const result=await supabase.from("work_orders").insert({...payload,order_number:orderNumber}).select("id").maybeSingle();
     if(result.error&&result.error.code==="23505"&&result.error.message.includes("work_orders_organization_id_order_number_key"))continue;
-    if(result.error||!result.data)saveMessage="Não foi possível salvar a ordem. Nenhuma gravação foi confirmada.";
+    if(result.error?.code==="23514")saveMessage=result.error.message;else if(result.error||!result.data)saveMessage="Não foi possível salvar a ordem. Nenhuma gravação foi confirmada.";
     else saved=true;
     break;
    }
