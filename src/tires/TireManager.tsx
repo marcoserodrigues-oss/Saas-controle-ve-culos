@@ -308,7 +308,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       : selected?.status === "retread" ? "retread_returned"
       : selected?.status === "repair" ? "adjustment"
       : "mount";
-    const next = {...emptyEvent(),tire_id:tireId,event_type:defaultType,target_status:"in_stock" as TireStatus};
+    const next = {...emptyEvent(),tire_id:tireId,vehicle_id:tab === "layout" ? (layoutVehicle?.id ?? "") : "",event_type:defaultType,target_status:"in_stock" as TireStatus};
     const placement = tireId ? latestPlacement.get(tireId) : undefined;
     if (placement) { next.vehicle_id = placement.vehicle_id ?? ""; next.position_id = placement.position_id ?? ""; }
     setEventForm(next); setShowEventForm(true); setError(""); setNotice("");
@@ -584,7 +584,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   return <section className="tire-manager">
     <div className="tire-toolbar">
       <div><h2>Gestão e ciclo de vida dos pneus</h2><p>Inventário, montagem por posição, recapagem, reparos e histórico por número de série.</p></div>
-      <div className="tire-toolbar-actions"><button className="secondary-button" onClick={() => void load()} disabled={loading || saving}><RefreshCw size={15}/> Atualizar</button><button className="primary-button" onClick={() => openEventForm()} disabled={!tires.length || saving}><Plus size={16}/> Registrar evento</button><button className="primary-button" onClick={startNewTire}><Plus size={16}/> Novo pneu</button></div>
+      <div className="tire-toolbar-actions"><button className="secondary-button" onClick={() => void load()} disabled={loading || saving}><RefreshCw size={15}/> Atualizar</button><button className="primary-button" onClick={startNewTire}><Plus size={16}/> Novo pneu</button></div>
     </div>
     {(error || notice) && <div className={error ? "vehicle-message vehicle-error" : "vehicle-message vehicle-success"} role="status">{error ? <AlertCircle size={17}/> : <CheckCircle2 size={17}/>}<span>{error || notice}</span><button className="message-close" onClick={() => {setError("");setNotice("");}} aria-label="Fechar mensagem"><X size={15}/></button></div>}
     <div className="tire-kpis">
@@ -615,7 +615,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           <td>{t.status === "mounted" && v ? <div className="vehicle-name"><strong>{v.description}</strong><small>{p ? p.position_code + " · " + p.position_label : "Posição não identificada"}{v.plate ? " · " + v.plate : ""}</small></div> : "—"}</td>
           <td><div className="vehicle-name"><strong>{brl(Number(t.purchase_cost_cents))}</strong><small>{dateLabel(t.purchase_date)}</small></div></td>
           <td>{(durationKm.get(t.id) ?? 0).toLocaleString("pt-BR")} km</td>
-          <td><div className="vehicle-row-actions"><button className="secondary-button" onClick={() => openEventForm(t.id)} title="Registrar evento"><RotateCw size={15}/></button><button className="secondary-button" onClick={() => startEditTire(t)} title="Editar cadastro"><Pencil size={15}/></button></div></td>
+          <td><div className="vehicle-row-actions"><button className="secondary-button" onClick={() => { const place = latestPlacement.get(t.id); setLayoutVehicleId(place?.vehicle_id ?? layoutVehicle?.id ?? vehicles[0]?.id ?? ""); setTab("layout"); setError(""); setNotice("Selecione a operação no layout visual para movimentar este pneu."); }} title="Abrir layout visual"><Truck size={15}/></button><button className="secondary-button" onClick={() => startEditTire(t)} title="Editar cadastro"><Pencil size={15}/></button></div></td>
         </tr>;})}
         {!filteredTires.length && <tr><td colSpan={7}><div className="tire-empty"><CircleDot size={22}/><strong>Nenhum pneu encontrado</strong><span>Cadastre um pneu ou ajuste os filtros.</span></div></td></tr>}
       </tbody></table></div>}
@@ -647,9 +647,14 @@ export function TireManager({ organizationId }: { organizationId: string }) {
               {layoutTemplates.filter(t => t.asset_kind === (layoutVehicle?.kind ?? "vehicle")).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </label>
-          <button className="primary-button" disabled={!layoutVehicle || !selectedLayoutTemplate || saving} onClick={() => void applyLayoutTemplate()}>
-            <Settings2 size={15}/>{saving ? "Aplicando..." : layoutReady ? "Aplicar / sincronizar esquema" : "Aplicar esquema ao veículo"}
-          </button>
+          <div className="tire-layout-action-row">
+            <button className="primary-button" disabled={!layoutVehicle || !selectedLayoutTemplate || saving} onClick={() => void applyLayoutTemplate()}>
+              <Settings2 size={15}/>{saving ? "Aplicando..." : layoutReady ? "Aplicar / sincronizar esquema" : "Aplicar esquema ao veículo"}
+            </button>
+            <button className="secondary-button" disabled={!layoutVehicle || !tires.length || saving} onClick={() => openEventForm()}>
+              <Plus size={15}/> Registrar outro evento
+            </button>
+          </div>
           <p>Você pode definir o esquema também no cadastro do veículo. Aplicar um esquema cria ou reativa as posições correspondentes e preserva os registros de histórico.</p>
         </div>
 
@@ -663,7 +668,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           {!layoutReady && <div className="tire-layout-warning"><AlertCircle size={17}/><span>Este esquema ainda não está totalmente aplicado ao veículo. Clique em <strong>Aplicar esquema ao veículo</strong> para criar as posições antes de iniciar a montagem.</span></div>}
           <div className="tire-layout-workspace">
             <div className="tire-diagram-card panel">
-              <div className="tire-diagram-heading"><div><h3>Desenho da montagem</h3><p>Arraste um pneu do estoque para uma posição vazia. Para fazer rodízio/troca, arraste um pneu montado para outra posição.</p></div><span className={layoutReady ? "tire-layout-ready" : "tire-layout-pending"}>{layoutReady ? "Esquema aplicado" : "Prévia do esquema"}</span></div>
+              <div className="tire-diagram-heading"><div><h3>Desenho da montagem</h3><p>Arraste um pneu do estoque para uma posição vazia. Arraste um pneu montado para outra posição para rodízio/troca. Clique em um pneu montado para abrir suas operações.</p></div><span className={layoutReady ? "tire-layout-ready" : "tire-layout-pending"}>{layoutReady ? "Esquema aplicado" : "Prévia do esquema"}</span></div>
               <div className={"tire-diagram-canvas tire-diagram-" + selectedLayoutTemplate.diagram_type}>
                 <div className="tire-diagram-direction">{selectedLayoutTemplate.diagram_type === "trailer" ? "FRENTE / ENGATE" : "FRENTE DO VEÍCULO"}</div>
                 <div className="tire-diagram-body" aria-hidden="true"><span/><span/><span/></div>
@@ -714,7 +719,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                 })}
                 {!mountedElsewhereForLayout.length && <div className="tire-empty tire-empty-compact"><strong>Nenhum pneu montado em outro veículo</strong><span>As transferências aparecerão aqui quando houver pneus montados em outro ativo.</span></div>}
               </div>
-              <div className="tire-diagram-help"><strong>Como usar</strong><ol><li>Aplique o esquema correspondente ao veículo.</li><li>Arraste um pneu em estoque para uma posição vazia para montá-lo.</li><li>Arraste um pneu montado para outra posição para registrar um rodízio; se houver outro pneu, os dois trocarão de posição.</li><li>Confirme data, leitura e observações no formulário que será aberto.</li></ol></div>
+              <div className="tire-diagram-help"><strong>Operações de pneus</strong><ol><li>Escolha o veículo e aplique o esquema correspondente.</li><li>Arraste um pneu do estoque para uma posição vazia para montá-lo.</li><li>Arraste um pneu montado para outra posição para registrar rodízio, troca ou transferência.</li><li>Clique em um pneu montado para abrir opções como desmontagem e inspeção.</li><li>Use <strong>Registrar outro evento</strong> para recapagem, reparo, descarte ou ajuste de status.</li><li>Confirme data, leitura do veículo e observações antes de salvar.</li></ol></div>
             </aside>
           </div>
           {layoutVehiclePositions.some(p => !selectedLayoutTemplate.layout.some(lp => lp.code.toLocaleLowerCase("pt-BR") === p.position_code.toLocaleLowerCase("pt-BR"))) && <div className="tire-layout-warning"><AlertCircle size={17}/><span>Existem posições antigas fora do esquema atual. Elas não serão apagadas; confira a aba “Posições por veículo” para revisar os cadastros legados.</span></div>}
