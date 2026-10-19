@@ -49,7 +49,10 @@ begin
     v_org := new.organization_id; v_vehicle := new.vehicle_id; v_reading := new.meter_value;
   elsif tg_table_name = 'tire_events' then
     if tg_op = 'UPDATE' and new.vehicle_id is not distinct from old.vehicle_id and new.meter_value is not distinct from old.meter_value then return new; end if;
-    if new.vehicle_id is null or new.meter_value is null then return new; end if;
+    if new.vehicle_id is null then return new; end if;
+    if new.meter_value is null then
+      raise exception 'Informe a leitura do hodômetro/horímetro para eventos de pneus vinculados a um veículo.' using errcode = '23514';
+    end if;
     v_org := new.organization_id; v_vehicle := new.vehicle_id; v_reading := new.meter_value;
   elsif tg_table_name = 'work_orders' then
     if tg_op = 'UPDATE' and new.vehicle_id is not distinct from old.vehicle_id and new.meter_at_open is not distinct from old.meter_at_open and new.meter_at_close is not distinct from old.meter_at_close then return new; end if;
