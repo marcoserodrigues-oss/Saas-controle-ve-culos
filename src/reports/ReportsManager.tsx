@@ -247,7 +247,7 @@ export function ReportsManager({ organizationId }: Props) {
           ["Combustível", costs.fuelCents, "fuel"],
           ["Manutenção concluída", costs.maintenanceCents, "maintenance"],
           ["Eventos de pneus", costs.tireCents, "tire"],
-          ["Despesas avulsas sem vínculo", costs.otherCents, "other"]
+          ["Despesas avulsas", costs.otherCents, "other"]
         ] as const).map(([label, value, tone]) => <div className="fleet-cost-row" key={label}>
           <div className="fleet-cost-label"><span>{label}</span><strong>{loading ? "—" : formatBrlCents(value)}</strong></div>
           <div className="fleet-bar-track"><span className={"fleet-bar-fill " + tone} style={{ width: (loading ? 0 : totalCostCents > 0 ? value / totalCostCents * 100 : 0) + "%" }}/></div>
