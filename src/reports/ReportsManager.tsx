@@ -49,6 +49,7 @@ export function ReportsManager({ organizationId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedVehicleId, setSelectedVehicleId] = useState("");
 
   const startIso = useMemo(() => dateStartIso(appliedFrom), [appliedFrom]);
   const endExclusiveIso = useMemo(() => dateEndExclusiveIso(appliedTo), [appliedTo]);
@@ -77,24 +78,35 @@ export function ReportsManager({ organizationId }: Props) {
     [data.workOrders, startIso, endExclusiveIso]
   );
   const rangeData = useMemo(() => ({ ...data, workOrders: rangeWorkOrders }), [data, rangeWorkOrders]);
-  const costs = useMemo(() => buildCostBreakdown(rangeData), [rangeData]);
-  const vehicleRows = useMemo(() => buildVehicleCostRows(rangeData), [rangeData]);
+  const reportData = useMemo<FleetAnalyticsData>(() => {
+    if (!selectedVehicleId) return rangeData;
+    return {
+      ...rangeData,
+      vehicles: rangeData.vehicles.filter(vehicle => vehicle.id === selectedVehicleId),
+      fuelEvents: rangeData.fuelEvents.filter(row => row.vehicle_id === selectedVehicleId),
+      workOrders: rangeData.workOrders.filter(row => row.vehicle_id === selectedVehicleId),
+      tireEvents: rangeData.tireEvents.filter(row => row.vehicle_id === selectedVehicleId),
+      standaloneExpenses: rangeData.standaloneExpenses.filter(row => row.vehicle_id === selectedVehicleId)
+    };
+  }, [rangeData, selectedVehicleId]);
+  const costs = useMemo(() => buildCostBreakdown(reportData), [reportData]);
+  const vehicleRows = useMemo(() => buildVehicleCostRows(reportData), [reportData]);
   const consumptionByVehicle = useMemo(
-    () => calculateFuelConsumptionByVehicle(data.vehicles, fuelHistory, startIso, endExclusiveIso),
-    [data.vehicles, fuelHistory, startIso, endExclusiveIso]
+    () => calculateFuelConsumptionByVehicle(reportData.vehicles, fuelHistory, startIso, endExclusiveIso),
+    [reportData.vehicles, fuelHistory, startIso, endExclusiveIso]
   );
   const fuelConsumptionRows = useMemo(
     () => [...data.vehicles]
       .map(vehicle => ({ vehicle, metric: consumptionByVehicle.get(vehicle.id) }))
       .sort((a, b) => a.vehicle.description.localeCompare(b.vehicle.description, "pt-BR")),
-    [data.vehicles, consumptionByVehicle]
+    [reportData.vehicles, consumptionByVehicle]
   );
-  const closedOrders = rangeWorkOrders.filter(order => order.status === "closed");
-  const openOrders = rangeWorkOrders.filter(order => openOrderStatuses.has(order.status));
-  const totalFuelLiters = data.fuelEvents.reduce((sum, row) => sum + asNumber(row.liters), 0);
+  const closedOrders = reportData.workOrders.filter(order => order.status === "closed");
+  const openOrders = reportData.workOrders.filter(order => openOrderStatuses.has(order.status));
+  const totalFuelLiters = reportData.fuelEvents.reduce((sum, row) => sum + asNumber(row.liters), 0);
   const totalCostCents = costs.fuelCents + costs.maintenanceCents + costs.tireCents + costs.otherCents;
-  const unassignedTireCost = data.tireEvents.filter(event => !event.vehicle_id).reduce((sum, event) => sum + asNumber(event.cost_cents), 0);
-  const unassignedExpenseCost = data.standaloneExpenses.filter(expense => !expense.vehicle_id).reduce((sum, expense) => sum + asNumber(expense.amount_cents), 0);
+  const unassignedTireCost = reportData.tireEvents.filter(event => !event.vehicle_id).reduce((sum, event) => sum + asNumber(event.cost_cents), 0);
+  const unassignedExpenseCost = reportData.standaloneExpenses.filter(expense => !expense.vehicle_id).reduce((sum, expense) => sum + asNumber(expense.amount_cents), 0);
   const unassignedCost = unassignedTireCost + unassignedExpenseCost;
 
   const monthlyRows = useMemo(() => {
@@ -105,7 +117,7 @@ export function ReportsManager({ organizationId }: Props) {
       if (!months.has(key)) months.set(key, { key, label: monthLabel(key), fuelCents: 0, maintenanceCents: 0, tireCents: 0, otherCents: 0, totalCents: 0 });
       return months.get(key)!;
     };
-    for (const row of data.fuelEvents) {
+    for (const row of reportData.fuelEvents) {
       const bucket = ensure(row.occurred_at);
       if (bucket) bucket.fuelCents += row.total_cents === null ? Math.round(asNumber(row.liters) * asNumber(row.unit_price_cents)) : asNumber(row.total_cents);
     }
@@ -114,17 +126,17 @@ export function ReportsManager({ organizationId }: Props) {
       const bucket = ensure(row.closed_at ?? row.opened_at);
       if (bucket) bucket.maintenanceCents += asNumber(row.labor_cost_cents) + asNumber(row.parts_cost_cents);
     }
-    for (const row of data.tireEvents) {
+    for (const row of reportData.tireEvents) {
       const bucket = ensure(row.occurred_at);
       if (bucket) bucket.tireCents += asNumber(row.cost_cents);
     }
-    for (const row of data.standaloneExpenses) {
+    for (const row of reportData.standaloneExpenses) {
       const bucket = ensure(row.expense_date);
       if (bucket) bucket.otherCents += asNumber(row.amount_cents);
     }
     for (const row of months.values()) row.totalCents = row.fuelCents + row.maintenanceCents + row.tireCents + row.otherCents;
     return [...months.values()].sort((a, b) => a.key.localeCompare(b.key));
-  }, [data.fuelEvents, data.tireEvents, data.standaloneExpenses, rangeWorkOrders]);
+  }, [reportData.fuelEvents, reportData.tireEvents, reportData.standaloneExpenses, reportData.workOrders]);
   const maxMonth = Math.max(1, ...monthlyRows.map(row => row.totalCents));
 
   function applyRange() {
@@ -168,7 +180,7 @@ export function ReportsManager({ organizationId }: Props) {
 
   return <section className="fleet-feature-shell" aria-label="Relatórios gerenciais da frota">
     <div className="fleet-feature-toolbar">
-      <div><h2>Relatórios gerenciais</h2><p>Consolidação de combustível, ordens concluídas, pneus e despesas avulsas não vinculadas.</p></div>
+      <div><h2>Relatórios gerenciais</h2><p>Consulte os indicadores e custos por período e filtre um veículo/equipamento específico.</p></div>
       <div className="fleet-toolbar-actions">
         <button type="button" className="secondary-button" onClick={() => setRefreshKey(v => v + 1)} disabled={loading}><RefreshCw size={15}/> Atualizar dados</button>
         <button type="button" className="primary-button" onClick={downloadCsv} disabled={loading}><Download size={15}/> Exportar CSV</button>
@@ -179,6 +191,7 @@ export function ReportsManager({ organizationId }: Props) {
       <div className="fleet-period-title"><CalendarDays size={17}/><strong>Período de apuração</strong></div>
       <label>Data inicial<input type="date" value={fromDate} max={toDate || undefined} onChange={e => setFromDate(e.target.value)}/></label>
       <label>Data final<input type="date" value={toDate} min={fromDate || undefined} onChange={e => setToDate(e.target.value)}/></label>
+      <label>Veículo / equipamento<select value={selectedVehicleId} onChange={e => setSelectedVehicleId(e.target.value)}><option value="">Todos os veículos</option>{data.vehicles.map(vehicle => <option key={vehicle.id} value={vehicle.id}>{vehicle.description}{vehicle.plate ? " · " + vehicle.plate : ""}</option>)}</select></label>
       <button type="button" className="primary-button" onClick={applyRange} disabled={loading}>Aplicar período</button>
       <button type="button" className="secondary-button" onClick={setLast30Days} disabled={loading}>Últimos 30 dias</button>
     </div>
