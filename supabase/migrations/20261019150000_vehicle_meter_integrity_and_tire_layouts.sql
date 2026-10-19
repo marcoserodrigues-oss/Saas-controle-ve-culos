@@ -27,7 +27,17 @@ update public.vehicles set initial_meter = 0 where initial_meter is null;
 
 alter table public.vehicles alter column initial_meter set default 0;
 alter table public.vehicles alter column initial_meter set not null;
-alter table public.vehicles add constraint vehicles_initial_meter_nonnegative check (initial_meter >= 0);
+do $
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'vehicles_initial_meter_nonnegative'
+      and conrelid = 'public.vehicles'::regclass
+  ) then
+    alter table public.vehicles add constraint vehicles_initial_meter_nonnegative check (initial_meter >= 0);
+  end if;
+end;
+$;
 
 create or replace function public.validate_vehicle_meter_monotonic()
 returns trigger
