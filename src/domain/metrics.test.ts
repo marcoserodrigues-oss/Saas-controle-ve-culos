@@ -91,7 +91,9 @@ describe("tank-to-tank fuel consumption", () => {
         { id: "a", vehicle_id: "generator", occurred_at: "2026-01-01T10:00:00Z", meter_value: 100, liters: 40, fueling_kind: "full" },
         { id: "b", vehicle_id: "generator", occurred_at: "2026-01-05T10:00:00Z", meter_value: null, liters: 10, fueling_kind: "partial" },
         { id: "c", vehicle_id: "generator", occurred_at: "2026-01-10T10:00:00Z", meter_value: 150, liters: 30, fueling_kind: "full" },
-        { id: "d", vehicle_id: "generator", occurred_at: "2026-01-15T10:00:00Z", meter_value: 160, liters: 20, fueling_kind: "full" }
+        { id: "d", vehicle_id: "generator", occurred_at: "2026-01-12T10:00:00Z", meter_value: 149, liters: 5, fueling_kind: "partial" },
+        { id: "e", vehicle_id: "generator", occurred_at: "2026-01-15T10:00:00Z", meter_value: 160, liters: 20, fueling_kind: "full" },
+        { id: "f", vehicle_id: "generator", occurred_at: "2026-01-20T10:00:00Z", meter_value: 170, liters: 20, fueling_kind: "full" }
       ],
       "2026-01-01T00:00:00Z",
       "2026-02-01T00:00:00Z"
