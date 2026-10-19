@@ -4,11 +4,12 @@ import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircl
 import { supabase } from "../lib/supabase";
 import { nextSequentialCode } from "../lib/automaticCode";
 import { calculateTireLifecycleReport } from "./tireLifecycle";
+import { VehicleMeterReference } from "../lib/VehicleMeterReference";
 
 type TireStatus = "in_stock" | "mounted" | "retread" | "repair" | "scrapped" | "sold";
 type EventType = "purchase" | "mount" | "dismount" | "rotation" | "transfer" | "retread_sent" | "retread_returned" | "repair" | "inspection" | "scrap" | "adjustment";
 type Tire = { id: string; serial_number: string; brand: string | null; model: string | null; size: string; purchase_date: string | null; purchase_cost_cents: number; status: TireStatus; created_at: string };
-type Vehicle = { id: string; code: string; plate: string | null; description: string; kind: string; meter_kind: string; status: string; tire_layout_template_id: string | null };
+type Vehicle = { id: string; code: string; plate: string | null; description: string; kind: string; meter_kind: string; initial_meter: number | null; status: string; tire_layout_template_id: string | null };
 type LayoutPosition = { code: string; label: string; axle: number; side: string; slot: string; x: number; y: number };
 type LayoutTemplate = { id: string; organization_id: string | null; code: string; name: string; asset_kind: string; diagram_type: string; axle_count: number; tire_count: number; description: string | null; layout: LayoutPosition[]; is_system: boolean; is_active: boolean };
 type Position = { id: string; vehicle_id: string; position_code: string; position_label: string; is_active: boolean };
@@ -159,7 +160,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     setLoading(true);
     const [t,v,p,s,e,l] = await Promise.all([
       supabase.from("tires").select("id,serial_number,brand,model,size,purchase_date,purchase_cost_cents,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
-      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,status,tire_layout_template_id").eq("organization_id",organizationId).eq("status","active").order("description"),
+      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,initial_meter,status,tire_layout_template_id").eq("organization_id",organizationId).eq("status","active").order("description"),
       supabase.from("vehicle_tire_positions").select("id,vehicle_id,position_code,position_label,is_active").eq("organization_id",organizationId).order("position_code"),
       supabase.from("suppliers").select("id,name,supplier_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
       loadAllTireEvents(organizationId),
@@ -753,6 +754,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         <label>Custo do evento (R$)<input type="number" min="0" step="0.01" value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/></label>
         <label>Fornecedor / recapadora<select value={eventForm.supplier_id} onChange={e=>setEventForm(f=>({...f,supplier_id:e.target.value}))}><option value="">Não informado</option>{suppliers.filter(s=>s.status==="active").map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         {(needsVehiclePosition || eventForm.event_type === "inspection") && <label>Veículo / equipamento<select value={eventForm.vehicle_id} required={needsVehiclePosition} onChange={e=>setEventForm(f=>({...f,vehicle_id:e.target.value,position_id:""}))}><option value="">Selecione...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : " · " + v.code}</option>)}</select></label>}
+        {(needsVehiclePosition || eventForm.event_type === "inspection") && <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter}/>}
         {needsVehiclePosition && <label>Posição de montagem<select required value={eventForm.position_id} onChange={e=>setEventForm(f=>({...f,position_id:e.target.value}))}><option value="">Selecione...</option>{availableEventPositions.map(p=><option key={p.id} value={p.id}>{p.position_code} · {p.position_label}</option>)}</select></label>}
         {eventForm.event_type === "adjustment" && <label>Corrigir status para<select required value={eventForm.target_status} onChange={e=>setEventForm(f=>({...f,target_status:e.target.value as TireStatus}))}>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
         <label>Motivo / referência<input maxLength={180} value={eventForm.reason} onChange={e=>setEventForm(f=>({...f,reason:e.target.value}))} placeholder="Ordem de serviço, motivo, protocolo..."/></label>
