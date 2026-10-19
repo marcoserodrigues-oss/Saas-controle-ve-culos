@@ -31,7 +31,14 @@ function readVehicleDraft(organizationId: string): VehicleDraft | null {
       !draft.form ||
       typeof draft.form.description !== "string"
     ) return null;
-    return draft;
+    return {
+      ...draft,
+      form: {
+        ...emptyForm,
+        ...draft.form,
+        initial_meter: typeof draft.form.initial_meter === "string" ? draft.form.initial_meter : ""
+      }
+    };
   } catch {
     return null;
   }
