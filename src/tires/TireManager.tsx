@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
-import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, RotateCw, History, Settings2, Truck } from "lucide-react";
+import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, History, Settings2, Truck } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { nextSequentialCode } from "../lib/automaticCode";
 import { calculateTireLifecycleReport } from "./tireLifecycle";
