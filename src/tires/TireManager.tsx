@@ -694,6 +694,20 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                   </button>;
                 })}
                 <div className="tire-diagram-legend"><span><i className="legend-occupied"/> Pneu montado</span><span><i className="legend-empty"/> Posição vazia</span><span><i className="legend-inactive"/> Posição inativa</span></div>
+                <div className="tire-discard-dropzone" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const tireId = e.dataTransfer.getData("text/plain");
+                  const dragged = tireMap.get(tireId);
+                  if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para a lixeira somente um pneu montado neste veículo."); return; }
+                  const place = latestPlacement.get(dragged.id);
+                  if (place?.vehicle_id !== layoutVehicle?.id) { setError("Para retirar um pneu de outro veículo, selecione primeiro o ativo de origem."); return; }
+                  setTireDecision({ mode: "trash", draggedTireId: dragged.id, positionId: null, occupantTireId: dragged.id });
+                  setError("");
+                  setNotice("");
+                }}>
+                  <Trash2 size={19}/><span><strong>Lixeira de pneus</strong><small>Arraste um pneu montado aqui para devolver ao estoque ou descartar</small></span>
+                </div>
               </div>
             </div>
             <aside className="tire-stock-panel panel">
@@ -743,6 +757,25 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     </>}
     <p className="tire-footnote">A duração em km é estimada apenas nos ciclos com montagem e desmontagem registrados no mesmo veículo e com leituras válidas. Não representa quilometragem de vida útil completa quando faltarem eventos históricos.</p>
 
+    {tireDecision && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel tire-decision-modal" role="dialog" aria-modal="true" aria-labelledby="tire-decision-title">
+      <div className="vehicle-form-heading"><div><h3 id="tire-decision-title">{tireDecision.mode === "replace" ? "Substituir pneu nesta posição?" : "Retirar pneu da montagem?"}</h3><p>O histórico será preservado. Nenhuma alteração será feita até você confirmar.</p></div><button className="icon-button" onClick={() => setTireDecision(null)} aria-label="Fechar"><X size={18}/></button></div>
+      <div className="tire-decision-summary">
+        {tireDecision.mode === "replace" ? <>
+          <p><strong>Pneu novo:</strong> {tireMap.get(tireDecision.draggedTireId)?.serial_number ?? "—"}</p>
+          <p><strong>Pneu atualmente montado:</strong> {tireMap.get(tireDecision.occupantTireId)?.serial_number ?? "—"}</p>
+          <p>O pneu atual será tratado primeiro; depois o sistema continuará com a montagem do pneu novo.</p>
+        </> : <>
+          <p><strong>Pneu:</strong> {tireMap.get(tireDecision.occupantTireId)?.serial_number ?? "—"}</p>
+          <p>Escolha o destino do pneu retirado. O sistema registrará a desmontagem antes de continuar.</p>
+        </>}
+      </div>
+      <div className="vehicle-form-actions tire-decision-actions">
+        <button type="button" className="secondary-button" onClick={() => setTireDecision(null)}>Cancelar operação</button>
+        <button type="button" className="secondary-button" disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "stock")}><Truck size={16}/> {tireDecision.mode === "replace" ? "Voltar ao estoque e montar novo" : "Voltar ao estoque"}</button>
+        <button type="button" className="danger-button" disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "scrap")}><Trash2 size={16}/> Descartar pneu</button>
+      </div>
+    </section></div>}
+
     {showTireForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-form-title"><div className="vehicle-form-heading"><div><h3 id="tire-form-title">{editingTireId ? "Editar pneu" : "Cadastrar pneu"}</h3><p>O número de série identifica o pneu individualmente.</p></div><button className="icon-button" onClick={() => setShowTireForm(false)} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveTire}><div className="vehicle-fields">
         <label>Número de série / identificação<input minLength={2} maxLength={100} value={tireForm.serial_number} onChange={e=>setTireForm(f=>({...f,serial_number:e.target.value}))} placeholder="Opcional · deixe em branco para gerar PNE-0001"/></label>
@@ -754,7 +787,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div><div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => setShowTireForm(false)}>Cancelar</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : editingTireId ? "Salvar alterações" : "Cadastrar pneu"}</button></div></form>
     </section></div>}
 
-    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);}} aria-label="Fechar"><X size={18}/></button></div>
+    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);setTireWorkflow(null);}} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveEvent}><div className="vehicle-fields tire-event-fields">
         <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? f.vehicle_id,position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
         <label>Tipo de evento<select required disabled={Boolean(layoutMoveTarget)} value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
@@ -773,7 +806,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div>
       {currentTire && <div className="tire-modal-hint">Status atual: <strong>{statusLabels[currentTire.status]}</strong>{currentLocation?.vehicle_id ? " · Local atual: " + (vehicleMap.get(currentLocation.vehicle_id)?.description ?? "veículo") + (currentLocation.position_id && positionMap.get(currentLocation.position_id) ? " / " + positionMap.get(currentLocation.position_id)!.position_label : "") : ""}</div>}
       {eventForm.event_type === "dismount" && <div className="tire-modal-hint">A desmontagem será registrada na última posição conhecida, preservando o histórico.</div>}
-      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);}}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : "Registrar no histórico"}</button></div></form>
+      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);setTireWorkflow(null);}}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : "Registrar no histórico"}</button></div></form>
     </section></div>}
 
     {showPositionForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-position-title"><div className="vehicle-form-heading"><div><h3 id="tire-position-title">Nova posição de pneu</h3><p>Cadastre posições conforme os eixos e o layout real do veículo.</p></div><button className="icon-button" onClick={() => setShowPositionForm(false)} aria-label="Fechar"><X size={18}/></button></div>
