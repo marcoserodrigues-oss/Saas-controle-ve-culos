@@ -184,3 +184,8 @@ drop trigger if exists validate_vehicle_meter_baseline on public.vehicles;
 create trigger validate_vehicle_meter_baseline
 before update of initial_meter, meter_kind on public.vehicles
 for each row execute function public.validate_vehicle_meter_baseline();
+
+
+-- These are trigger-only functions, not public RPC endpoints.
+revoke execute on function public.validate_vehicle_meter_monotonic() from public, anon, authenticated;
+revoke execute on function public.validate_vehicle_meter_baseline() from public, anon, authenticated;
