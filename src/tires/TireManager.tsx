@@ -342,7 +342,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     }
     if (action === "scrap") {
       setTireWorkflow({ mode: decision.mode, action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage: "scrap" });
-      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: "scrap", reason: "Descarte pelo layout visual" });
+      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: "scrap", vehicle_id: eventVehicleContext(oldTire.id) || (layoutVehicle?.id ?? ""), reason: "Descarte pelo layout visual" });
       setLayoutMoveTarget(null);
       setShowEventForm(true);
       setTireDecision(null);
@@ -378,7 +378,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     if (!flow) return;
     if (flow.stage === "dismount" && flow.action === "scrap") {
       setTireWorkflow({ ...flow, stage: "scrap" });
-      setEventForm({ ...emptyEvent(), tire_id: flow.oldTireId, event_type: "scrap", reason: "Descarte pelo layout visual" });
+      setEventForm({ ...emptyEvent(), tire_id: flow.oldTireId, event_type: "scrap", vehicle_id: eventVehicleContext(flow.oldTireId) || (layoutVehicle?.id ?? ""), reason: "Descarte pelo layout visual" });
       setLayoutMoveTarget(null);
       setShowEventForm(true);
       setNotice("Desmontagem registrada. Confirme agora o descarte do pneu antigo.");
@@ -521,17 +521,21 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (["scrapped","sold"].includes(oldStatus)) { setError("Este pneu já está descartado ou vendido."); return; }
       if (!eventForm.reason.trim()) { setError("Informe o motivo do descarte."); return; }
       if (!window.confirm("Confirmar o descarte do pneu " + tire.serial_number + "?\nMotivo: " + eventForm.reason.trim() + "\nO histórico será preservado.")) return;
-      nextStatus = "scrapped"; vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? null;
+      nextStatus = "scrapped"; vehicleId = eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? null;
     } else if (kind === "inspection") {
-      vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? (eventForm.position_id || null);
+      vehicleId = isMounted ? (vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id) : eventForm.vehicle_id;
+      positionId = isMounted ? (vehiclePlacement?.position_id ?? (eventForm.position_id || null)) : (eventForm.position_id || null);
     } else if (kind === "adjustment") {
       nextStatus = eventForm.target_status;
       if (nextStatus === "mounted") {
         if (!eventForm.vehicle_id || !eventForm.position_id) { setError("Para ajustar o status para montado, informe veículo e posição."); return; }
         vehicleId = eventForm.vehicle_id; positionId = eventForm.position_id;
-      } else {
+      } else if (isMounted) {
         vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id;
         positionId = vehiclePlacement?.position_id ?? null;
+      } else {
+        vehicleId = eventForm.vehicle_id;
+        positionId = null;
       }
       if (nextStatus === "scrapped" && oldStatus !== "scrapped" && !window.confirm("Confirmar ajuste para descartado? O histórico será preservado.")) return;
     }
