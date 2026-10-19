@@ -329,8 +329,9 @@ export async function loadFuelConsumptionHistory(
   endExclusiveIso: string
 ): Promise<FuelConsumptionHistoryRow[]> {
   if (!supabase) throw new Error("Banco de dados não configurado. Confira a conexão do Fleetwise.");
+  const db = supabase;
   return fetchAllPages<FuelConsumptionHistoryRow>((from, to) => fetchPage<FuelConsumptionHistoryRow>(
-    supabase.from("fuel_events")
+    db.from("fuel_events")
       .select("id,vehicle_id,occurred_at,created_at,meter_value,liters,fueling_kind,status")
       .eq("organization_id", organizationId)
       .neq("status", "cancelled")
