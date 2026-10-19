@@ -305,6 +305,12 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   function setEventType(type: EventType) {
     setEventForm(f => ({...f,event_type:type}));
   }
+  function eventVehicleContext(tireId: string) {
+    const placement = latestPlacement.get(tireId);
+    if (placement?.vehicle_id) return placement.vehicle_id;
+    return events.find(event => event.tire_id === tireId && event.vehicle_id)?.vehicle_id ?? "";
+  }
+
   function openEventForm(tireId = "") {
     setLayoutMoveTarget(null);
     const selected = tireId ? tireMap.get(tireId) : undefined;
@@ -312,9 +318,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       : selected?.status === "retread" ? "retread_returned"
       : selected?.status === "repair" ? "adjustment"
       : "mount";
-    const next = {...emptyEvent(),tire_id:tireId,vehicle_id:tab === "layout" ? (layoutVehicle?.id ?? "") : "",event_type:defaultType,target_status:"in_stock" as TireStatus};
+    const next = {...emptyEvent(),tire_id:tireId,vehicle_id:tireId ? eventVehicleContext(tireId) : (tab === "layout" ? (layoutVehicle?.id ?? "") : ""),event_type:defaultType,target_status:"in_stock" as TireStatus};
     const placement = tireId ? latestPlacement.get(tireId) : undefined;
-    if (placement) { next.vehicle_id = placement.vehicle_id ?? ""; next.position_id = placement.position_id ?? ""; }
+    if (placement) { next.vehicle_id = placement.vehicle_id ?? next.vehicle_id; next.position_id = placement.position_id ?? ""; }
     setEventForm(next); setShowEventForm(true); setError(""); setNotice("");
   }
 
@@ -483,8 +489,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     const meter = eventForm.meter_value.trim() === "" ? null : Number(eventForm.meter_value);
     const cost = toCents(eventForm.cost);
     if (!eventForm.occurred_at || new Date(eventForm.occurred_at).getTime() > Date.now()) { setError("Informe uma data/hora válida, sem lançamento futuro."); return; }
-    if (eventForm.vehicle_id && meter === null) { setError("Informe a leitura atual do hodômetro/horímetro para vincular este evento ao veículo."); return; }
-    if (meter !== null && (!Number.isFinite(meter) || meter < 0)) { setError("A leitura do hodômetro/horímetro deve ser zero ou maior."); return; }
+    if (!eventForm.vehicle_id) { setError("Selecione o veículo/equipamento de referência para registrar a leitura atual do pneu."); return; }
+    if (meter === null) { setError("Informe a leitura atual do hodômetro/horímetro em toda movimentação de pneus."); return; }
+    if (!Number.isFinite(meter) || meter < 0) { setError("A leitura do hodômetro/horímetro deve ser zero ou maior."); return; }
     if (!Number.isFinite(cost) || cost < 0) { setError("O custo do evento não pode ser negativo."); return; }
     if (eventForm.supplier_id && !suppliers.some(s => s.id === eventForm.supplier_id)) { setError("O fornecedor selecionado não pertence à organização."); return; }
 
@@ -498,31 +505,33 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       nextStatus = "mounted"; vehicleId = eventForm.vehicle_id; positionId = eventForm.position_id;
     } else if (kind === "dismount") {
       if (!isMounted) { setError("Somente um pneu montado pode ser desmontado."); return; }
-      nextStatus = "in_stock"; vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
+      if (vehiclePlacement?.vehicle_id && eventForm.vehicle_id !== vehiclePlacement.vehicle_id) { setError("A leitura da desmontagem deve pertencer ao mesmo veículo onde o pneu está montado."); return; }
+      nextStatus = "in_stock"; vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? null;
     } else if (kind === "retread_sent") {
       if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes de enviá-lo para recapagem."); return; }
-      nextStatus = "retread";
+      nextStatus = "retread"; vehicleId = eventForm.vehicle_id;
     } else if (kind === "retread_returned") {
       if (oldStatus !== "retread") { setError("O retorno só pode ser lançado para pneu em recapagem."); return; }
-      nextStatus = "in_stock";
+      nextStatus = "in_stock"; vehicleId = eventForm.vehicle_id;
     } else if (kind === "repair") {
       if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes de registrar o envio para reparo."); return; }
-      nextStatus = "repair";
+      nextStatus = "repair"; vehicleId = eventForm.vehicle_id;
     } else if (kind === "scrap") {
       if (oldStatus === "mounted") { setError("Desmonte o pneu antes do descarte."); return; }
       if (["scrapped","sold"].includes(oldStatus)) { setError("Este pneu já está descartado ou vendido."); return; }
       if (!eventForm.reason.trim()) { setError("Informe o motivo do descarte."); return; }
       if (!window.confirm("Confirmar o descarte do pneu " + tire.serial_number + "?\nMotivo: " + eventForm.reason.trim() + "\nO histórico será preservado.")) return;
-      nextStatus = "scrapped";
+      nextStatus = "scrapped"; vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? null;
     } else if (kind === "inspection") {
-      vehicleId = vehiclePlacement?.vehicle_id ?? (eventForm.vehicle_id || null); positionId = vehiclePlacement?.position_id ?? (eventForm.position_id || null);
+      vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? (eventForm.position_id || null);
     } else if (kind === "adjustment") {
       nextStatus = eventForm.target_status;
       if (nextStatus === "mounted") {
         if (!eventForm.vehicle_id || !eventForm.position_id) { setError("Para ajustar o status para montado, informe veículo e posição."); return; }
         vehicleId = eventForm.vehicle_id; positionId = eventForm.position_id;
-      } else if (isMounted) {
-        vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
+      } else {
+        vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id;
+        positionId = vehiclePlacement?.position_id ?? null;
       }
       if (nextStatus === "scrapped" && oldStatus !== "scrapped" && !window.confirm("Confirmar ajuste para descartado? O histórico será preservado.")) return;
     }
@@ -882,12 +891,12 @@ export function TireManager({ organizationId }: { organizationId: string }) {
 
     {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={cancelEventForm} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveEvent}><div className="vehicle-fields tire-event-fields">
-        <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? f.vehicle_id,position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
+        <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? eventVehicleContext(id) ?? f.vehicle_id,position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
         <label>Tipo de evento<select required disabled={Boolean(layoutMoveTarget)} value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
         <label>Data e hora<input required type="datetime-local" disabled={Boolean(layoutMoveTarget)} value={eventForm.occurred_at} onChange={e=>setEventForm(f=>({...f,occurred_at:e.target.value}))}/></label>
-        {(needsVehiclePosition || eventForm.event_type === "inspection") && <label>Veículo / equipamento<select value={eventForm.vehicle_id} required={needsVehiclePosition} onChange={e=>setEventForm(f=>({...f,vehicle_id:e.target.value,position_id:""}))}><option value="">Selecione...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : " · " + v.code}</option>)}</select></label>}
-        {(needsVehiclePosition || eventForm.event_type === "inspection") && <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter}/>}
-        <label>Leitura no ativo (km/horas)<input type="number" min="0" step="0.1" value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/></label>
+        <label>Veículo / equipamento de referência<select value={eventForm.vehicle_id} required onChange={e=>setEventForm(f=>({...f,vehicle_id:e.target.value,position_id:"",meter_value:""}))}><option value="">Selecione...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : " · " + v.code}</option>)}</select></label>
+        <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter}/>
+        <label>Leitura atual no ativo (km/horas)<input type="number" min="0" step="0.1" required value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/><small>Obrigatória em toda movimentação de pneus; alimenta o histórico, a vida útil, os KPIs e os relatórios.</small></label>
         
         <label>Custo do evento (R$)<input type="number" min="0" step="0.01" value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/></label>
         <label>Fornecedor / recapadora<select value={eventForm.supplier_id} onChange={e=>setEventForm(f=>({...f,supplier_id:e.target.value}))}><option value="">Não informado</option>{suppliers.filter(s=>s.status==="active").map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
