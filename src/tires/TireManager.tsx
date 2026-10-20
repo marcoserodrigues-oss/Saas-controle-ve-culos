@@ -570,16 +570,14 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     }
 
     if (tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && kind === "dismount") {
-      const estimateCents = toCents(eventForm.retread_estimate_cost);
-      if (!Number.isFinite(estimateCents) || estimateCents < 0) { setError("O custo estimado da recapagem não pode ser negativo."); return; }
       setSaving(true); setError(""); setNotice("");
       const result = await supabase.rpc("send_tire_to_retread", {
         p_tire_id: tire.id,
         p_vehicle_id: eventForm.vehicle_id,
         p_meter_value: meter,
         p_occurred_at: new Date(eventForm.occurred_at).toISOString(),
-        p_dismount_cost_cents: cost,
-        p_retread_estimate_cents: estimateCents,
+        p_dismount_cost_cents: 0,
+        p_retread_estimate_cents: 0,
         p_supplier_id: eventForm.supplier_id || null,
         p_reason: eventForm.reason.trim() || null,
         p_notes: eventForm.notes.trim() || null
@@ -972,8 +970,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter} onReading={applyMeterReference}/>
         <label>Leitura atual no ativo (km/horas)<input type="number" min="0" step="0.1" required value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/><small>Obrigatória em toda movimentação de pneus; alimenta o histórico, a vida útil, os KPIs e os relatórios.</small></label>
         
-        <label>{eventForm.event_type === "retread_returned" ? "Custo final da recapagem (R$)" : eventForm.event_type === "retread_sent" ? "Custo estimado/contratado da recapagem (R$)" : eventForm.event_type === "dismount" ? "Custo da desmontagem (R$)" : "Custo do evento (R$)"}<input type="number" min="0" step="0.01" required={eventForm.event_type === "retread_returned" || (tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && eventForm.event_type === "dismount")} value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/>{eventForm.event_type === "retread_returned" && <small>Informe o custo final efetivamente cobrado. Este evento registra a despesa final e devolve o pneu ao estoque.</small>}</label>
-        {tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && <label>Custo estimado/contratado da recapagem (R$)<input type="number" min="0" step="0.01" value={eventForm.retread_estimate_cost} onChange={e=>setEventForm(f=>({...f,retread_estimate_cost:e.target.value}))}/><small>Opcional no envio. No retorno será registrado o custo final da nota, sem duplicar a despesa nos relatórios.</small></label>}
+        {!(tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && eventForm.event_type === "dismount") && <label>{eventForm.event_type === "retread_returned" ? "Custo final da recapagem (R$)" : eventForm.event_type === "retread_sent" ? "Custo estimado/contratado da recapagem (R$)" : eventForm.event_type === "dismount" ? "Custo da desmontagem (R$)" : "Custo do evento (R$)"}<input type="number" min="0" step="0.01" required={eventForm.event_type === "retread_returned"} value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/>{eventForm.event_type === "retread_returned" && <small>Informe o custo final efetivamente cobrado. Este evento registra a despesa final e devolve o pneu ao estoque.</small>}</label>}
+        {tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && <div className="tire-modal-hint">O envio não exige valor de recapagem. Registre o custo real somente quando o pneu retornar do fornecedor.</div>}
         <label>Fornecedor / recapadora<select value={eventForm.supplier_id} onChange={e=>setEventForm(f=>({...f,supplier_id:e.target.value}))}><option value="">Não informado</option>{suppliers.filter(s=>s.status==="active").map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         
         {needsVehiclePosition && <label>Posição de montagem<select required value={eventForm.position_id} onChange={e=>setEventForm(f=>({...f,position_id:e.target.value}))}><option value="">Selecione...</option>{availableEventPositions.map(p=><option key={p.id} value={p.id}>{p.position_code} · {p.position_label}</option>)}</select></label>}
