@@ -813,19 +813,31 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                   </button>;
                 })}
                 <div className="tire-diagram-legend"><span><i className="legend-occupied"/> Pneu montado</span><span><i className="legend-empty"/> Posição vazia</span><span><i className="legend-inactive"/> Posição inativa</span></div>
-                <div className="tire-discard-dropzone" style={{display:"flex",alignItems:"center",gap:12,marginTop:14,padding:"12px 14px",border:"2px dashed #dc6262",borderRadius:12,background:"rgba(220,98,98,0.08)",color:"var(--text-primary, inherit)",cursor:layoutReady?"pointer":"not-allowed"}} onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const tireId = e.dataTransfer.getData("text/plain");
-                  const dragged = tireMap.get(tireId);
-                  if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para a lixeira somente um pneu montado neste veículo."); return; }
-                  const place = latestPlacement.get(dragged.id);
-                  if (place?.vehicle_id !== layoutVehicle?.id) { setError("Para retirar um pneu de outro veículo, selecione primeiro o ativo de origem."); return; }
-                  setTireDecision({ mode: "trash", draggedTireId: dragged.id, positionId: null, occupantTireId: dragged.id });
-                  setError("");
-                  setNotice("");
-                }}>
-                  <Trash2 size={19}/><span><strong>Lixeira de pneus</strong><small>Arraste um pneu montado aqui para devolver ao estoque ou descartar</small></span>
+                <div className="tire-disposal-actions">
+                  <div className="tire-disposal-action retread" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    const tireId = e.dataTransfer.getData("text/plain");
+                    const dragged = tireMap.get(tireId);
+                    if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para recapagem somente um pneu montado neste veículo."); return; }
+                    const place = latestPlacement.get(dragged.id);
+                    if (place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
+                    setTireDecision({ mode: "trash", draggedTireId: dragged.id, positionId: null, occupantTireId: dragged.id });
+                    setError(""); setNotice("Pneu selecionado para recapagem. Confirme a operação na próxima etapa.");
+                  }} role="button" tabIndex={0} aria-label="Destino de recapagem: arraste um pneu montado aqui">
+                    <Recycle size={25}/><span><strong>Enviar para recapagem</strong><small>Arraste um pneu montado para iniciar a retirada e registrar a recapagem</small></span>
+                  </div>
+                  <div className="tire-disposal-action scrap" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    const tireId = e.dataTransfer.getData("text/plain");
+                    const dragged = tireMap.get(tireId);
+                    if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para descarte somente um pneu montado neste veículo."); return; }
+                    const place = latestPlacement.get(dragged.id);
+                    if (place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
+                    setTireDecision({ mode: "trash", draggedTireId: dragged.id, positionId: null, occupantTireId: dragged.id });
+                    setError(""); setNotice("Pneu selecionado para descarte. Confirme a operação na próxima etapa.");
+                  }} role="button" tabIndex={0} aria-label="Destino de descarte: arraste um pneu montado aqui">
+                    <Trash2 size={25}/><span><strong>Descartar pneu</strong><small>Arraste um pneu montado para registrar a retirada e o descarte</small></span>
+                  </div>
                 </div>
               </div>
             </div>
