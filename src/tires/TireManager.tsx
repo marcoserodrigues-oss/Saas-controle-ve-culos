@@ -26,7 +26,7 @@ const localDateTimePart = (value = new Date()) => new Date(value.getTime() - val
 const emptyTire = (): TireForm => ({ serial_number: "", brand: "", model: "", size: "", purchase_date: localDatePart(), purchase_cost: "" });
 const emptyEvent = (): EventForm => ({ tire_id: "", event_type: "mount", occurred_at: localDateTimePart(), vehicle_id: "", position_id: "", meter_value: "", cost: "", supplier_id: "", reason: "", notes: "", target_status: "in_stock" });
 const statusLabels: Record<TireStatus,string> = { in_stock: "Em estoque", mounted: "Montado", retread: "Em recapagem", repair: "Em reparo", scrapped: "Descartado", sold: "Vendido" };
-const eventLabels: Record<EventType,string> = { purchase: "Compra / cadastro", mount: "Montagem", dismount: "Desmontagem", rotation: "Rodízio", transfer: "Transferência", retread_sent: "Enviado para remodelagem/recapagem", retread_returned: "Entrada de pneu remoldado", repair: "Reparo", inspection: "Inspeção", scrap: "Descarte", adjustment: "Ajuste de status" };
+const eventLabels: Record<EventType,string> = { purchase: "Compra / cadastro", mount: "Montagem", dismount: "Desmontagem", rotation: "Rodízio", transfer: "Transferência", retread_sent: "Enviado para remodelagem/recapagem", retread_returned: "Retorno da recapagem / entrada no estoque", repair: "Reparo", inspection: "Inspeção", scrap: "Descarte", adjustment: "Ajuste de status" };
 const eventTypes: EventType[] = ["mount","dismount","rotation","transfer","retread_sent","retread_returned","repair","inspection","scrap","adjustment"];
 const brl = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((Number(cents) || 0) / 100);
 const dateLabel = (value: string | null) => value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(value.includes("T") ? value : value + "T12:00:00")) : "—";
@@ -148,7 +148,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life" | "layout">("inventory");
+  const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life" | "layout" | "retreads">("inventory");
   const [search, setSearch] = useState("");
   const [historyVehicleId, setHistoryVehicleId] = useState("");
   const [lifeVehicleId, setLifeVehicleId] = useState("");
@@ -718,6 +718,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     <div className="tire-tabs" role="tablist" aria-label="Seções de pneus">
       <button className={tab === "inventory" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("inventory")}><ClipboardList size={16}/> Inventário</button>
       <button className={tab === "history" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("history")}><Clock3 size={16}/> Histórico de eventos</button>
+      <button className={tab === "retreads" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("retreads")}><RefreshCw size={16}/> Retornos de recapagem {tires.filter(t => t.status === "retread").length > 0 && <span className="tire-tab-count">{tires.filter(t => t.status === "retread").length}</span>}</button>
       <button className={tab === "positions" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("positions")}><MapPin size={16}/> Posições por veículo</button>
       <button className={tab === "layout" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("layout")}><LayoutGrid size={16}/> Layout visual / rodízio</button>
       <button className={tab === "life" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("life")}><HeartPulse size={16}/> Vida útil / duração</button>
@@ -730,6 +731,10 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       {tab === "positions" && <button className="primary-button" onClick={() => {setPositionForm({vehicle_id:vehicles[0]?.id ?? "",position_code:"",position_label:""});setShowPositionForm(true);setError("");}}><Plus size={16}/> Nova posição</button>}
     </div>
     {loading ? <div className="tire-empty"><RefreshCw size={22}/><strong>Carregando dados...</strong></div> : <>
+      {tab === "retreads" && <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Pneu / série</th><th>Medida</th><th>Enviado em</th><th>Recapadora</th><th>Última leitura</th><th>Ação</th></tr></thead><tbody>
+        {tires.filter(t => t.status === "retread" && (!search.trim() || [t.serial_number,t.brand ?? "",t.model ?? "",t.size].some(v => v.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))))).map(t => {const sent = [...events].filter(e => e.tire_id === t.id && e.event_type === "retread_sent").sort((a,b) => b.occurred_at.localeCompare(a.occurred_at))[0];return <tr key={t.id}><td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{[t.brand,t.model].filter(Boolean).join(" ") || "Marca/modelo não informado"}</small></div></td><td>{t.size}</td><td>{sent ? datetimeLabel(sent.occurred_at) : "Data não registrada"}</td><td>{sent?.supplier_id ? supplierMap.get(sent.supplier_id) ?? "—" : "—"}</td><td>{sent?.meter_value == null ? "—" : Number(sent.meter_value).toLocaleString("pt-BR")}</td><td><button className="primary-button" disabled={saving} onClick={() => {openEventForm(t.id);setTab("retreads");}}>Registrar retorno e custo</button></td></tr>;})}
+        {!tires.some(t => t.status === "retread" && (!search.trim() || [t.serial_number,t.brand ?? "",t.model ?? "",t.size].some(v => v.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))))) && <tr><td colSpan={6}><div className="tire-empty"><RefreshCw size={22}/><strong>Nenhum pneu aguardando retorno</strong><span>Quando um pneu for enviado para recapagem, ele aparecerá aqui até o retorno ser confirmado.</span></div></td></tr>}
+      </tbody></table></div>}
       {tab === "inventory" && <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Pneu / série</th><th>Medida</th><th>Status</th><th>Localização atual</th><th>Compra</th><th>Uso registrado</th><th></th></tr></thead><tbody>
         {filteredTires.map(t => {const placement = latestPlacement.get(t.id);const v = placement?.vehicle_id ? vehicleMap.get(placement.vehicle_id) : null;const p = placement?.position_id ? positionMap.get(placement.position_id) : null;return <tr key={t.id}>
           <td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{[t.brand,t.model].filter(Boolean).join(" ") || "Marca/modelo não informado"}</small></div></td>
@@ -934,7 +939,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter} onReading={applyMeterReference}/>
         <label>Leitura atual no ativo (km/horas)<input type="number" min="0" step="0.1" required value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/><small>Obrigatória em toda movimentação de pneus; alimenta o histórico, a vida útil, os KPIs e os relatórios.</small></label>
         
-        <label>Custo do evento (R$)<input type="number" min="0" step="0.01" value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/></label>
+        <label>{eventForm.event_type === "retread_returned" ? "Custo final da recapagem (R$)" : eventForm.event_type === "retread_sent" ? "Custo estimado/contratado da recapagem (R$)" : eventForm.event_type === "dismount" ? "Custo da desmontagem (R$)" : "Custo do evento (R$)"}<input type="number" min="0" step="0.01" required={eventForm.event_type === "retread_returned"} value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/>{eventForm.event_type === "retread_returned" && <small>Informe o custo final efetivamente cobrado. Este evento registra a despesa final e devolve o pneu ao estoque.</small>}</label>
         <label>Fornecedor / recapadora<select value={eventForm.supplier_id} onChange={e=>setEventForm(f=>({...f,supplier_id:e.target.value}))}><option value="">Não informado</option>{suppliers.filter(s=>s.status==="active").map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         
         {needsVehiclePosition && <label>Posição de montagem<select required value={eventForm.position_id} onChange={e=>setEventForm(f=>({...f,position_id:e.target.value}))}><option value="">Selecione...</option>{availableEventPositions.map(p=><option key={p.id} value={p.id}>{p.position_code} · {p.position_label}</option>)}</select></label>}
