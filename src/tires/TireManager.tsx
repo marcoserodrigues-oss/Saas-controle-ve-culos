@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
-import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, History, Settings2, Truck, Trash2 } from "lucide-react";
+import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, History, Settings2, Truck, Trash2, ClipboardList, Clock3, MapPin, LayoutGrid, HeartPulse, Recycle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { nextSequentialCode } from "../lib/automaticCode";
 import { calculateTireLifecycleReport } from "./tireLifecycle";
@@ -713,11 +713,11 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       <article className="tire-kpi"><span>Custo de aquisição</span><strong>{brl(purchaseValue)}</strong><small>Valor acumulado cadastrado</small></article>
     </div>
     <div className="tire-tabs" role="tablist" aria-label="Seções de pneus">
-      <button className={tab === "inventory" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("inventory")}><CircleDot size={16}/> Inventário</button>
-      <button className={tab === "history" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("history")}><History size={16}/> Histórico de eventos</button>
-      <button className={tab === "positions" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("positions")}><Settings2 size={16}/> Posições por veículo</button>
-      <button className={tab === "layout" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("layout")}><CircleDot size={16}/> Layout visual / rodízio</button>
-      <button className={tab === "life" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("life")}><History size={16}/> Vida útil / duração</button>
+      <button className={tab === "inventory" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("inventory")}><ClipboardList size={16}/> Inventário</button>
+      <button className={tab === "history" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("history")}><Clock3 size={16}/> Histórico de eventos</button>
+      <button className={tab === "positions" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("positions")}><MapPin size={16}/> Posições por veículo</button>
+      <button className={tab === "layout" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("layout")}><LayoutGrid size={16}/> Layout visual / rodízio</button>
+      <button className={tab === "life" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("life")}><HeartPulse size={16}/> Vida útil / duração</button>
     </div>
     <div className="tire-list-toolbar">
       <label className="tire-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "history" ? "Buscar pneu, veículo ou evento..." : tab === "life" ? "Buscar no relatório de vida útil..." : "Buscar série, medida ou veículo..."}/></label>
