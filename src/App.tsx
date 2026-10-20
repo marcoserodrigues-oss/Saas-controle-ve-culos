@@ -71,7 +71,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
       <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
           <div className="brand-mark"><Gauge size={23} strokeWidth={2.4} /></div>
-          <div><strong>NextCode</strong><small>GESTÃO DE VEÍCULOS</small></div>
+          <div><strong>NexusCode</strong><small>GESTÃO DE VEÍCULOS</small></div>
           <button className="icon-button close-nav" onClick={() => setMobileNavOpen(false)} aria-label="Fechar menu"><X size={18} /></button>
         </div>
         <div className="company-switcher">
@@ -118,7 +118,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
           {activeModule === "dashboard" && organizationId ? <Dashboard organizationId={organizationId} onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : activeModule === "tires" && organizationId ? <TireManager organizationId={organizationId} /> : activeModule === "expenses" && organizationId ? <ExpensesManager organizationId={organizationId} /> : activeModule === "reports" && organizationId ? <ReportsManager organizationId={organizationId} /> : activeModule === "people" && organizationId ? <PeopleManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
-          <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>NextCode - Gestão de Veículos · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
+          <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>NexusCode - Gestão de Veículos · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
         </div>
       </main>
     </div>
