@@ -144,7 +144,7 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
   if (recoveryMode) return <div className="auth-screen">
     <form className="auth-card" onSubmit={updatePassword}>
       <div className="auth-mark">NC</div>
-      <div className="auth-eyebrow">NEXTCODE · SEGURANÇA DA CONTA</div>
+      <div className="auth-eyebrow">NEXUSCODE · SEGURANÇA DA CONTA</div>
       <h1>Crie uma nova senha</h1>
       <p className="auth-description">Escolha uma senha nova para acessar sua conta com segurança.</p>
       <label>Nova senha<input type="password" autoComplete="new-password" required minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Pelo menos 8 caracteres" /></label>
@@ -158,7 +158,7 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
   if (!session && forgotPasswordMode) return <div className="auth-screen">
     <form className="auth-card" onSubmit={requestPasswordReset}>
       <div className="auth-mark">NC</div>
-      <div className="auth-eyebrow">NEXTCODE · RECUPERAÇÃO DE ACESSO</div>
+      <div className="auth-eyebrow">NEXUSCODE · RECUPERAÇÃO DE ACESSO</div>
       <h1>Esqueceu sua senha?</h1>
       <p className="auth-description">Informe seu e-mail cadastrado. Enviaremos um link para criar uma nova senha.</p>
       <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@empresa.com" /></label>
@@ -172,7 +172,7 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
   if (!session) return <div className="auth-screen">
     <form className="auth-card" onSubmit={signIn}>
       <div className="auth-mark">NC</div>
-      <div className="auth-eyebrow">NEXTCODE · GESTÃO DE VEÍCULOS</div>
+      <div className="auth-eyebrow">NEXUSCODE · GESTÃO DE VEÍCULOS</div>
       <h1>Acesse sua conta</h1>
       <p className="auth-description">Entre com as credenciais fornecidas pelo administrador da sua organização.</p>
       <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@empresa.com" /></label>
