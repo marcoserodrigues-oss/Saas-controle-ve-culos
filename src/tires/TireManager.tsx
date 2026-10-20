@@ -160,6 +160,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [eventForm, setEventForm] = useState<EventForm>(emptyEvent());
   const [showPositionForm, setShowPositionForm] = useState(false);
   const [positionForm, setPositionForm] = useState<PositionForm>({ vehicle_id: "", position_code: "", position_label: "" });
+  const applyMeterReference = useCallback((value: number) => {
+    setEventForm(current => current.meter_value.trim() ? current : { ...current, meter_value: String(value) });
+  }, []);
 
   const load = useCallback(async () => {
     if (!supabase) { setError("Banco de dados não configurado."); setLoading(false); return; }
@@ -928,7 +931,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         <label>Tipo de evento<select required disabled={Boolean(layoutMoveTarget)} value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
         <label>Data e hora<input required type="datetime-local" disabled={Boolean(layoutMoveTarget)} value={eventForm.occurred_at} onChange={e=>setEventForm(f=>({...f,occurred_at:e.target.value}))}/></label>
         <label>Veículo / equipamento de referência<select value={eventForm.vehicle_id} required onChange={e=>setEventForm(f=>({...f,vehicle_id:e.target.value,position_id:"",meter_value:""}))}><option value="">Selecione...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : " · " + v.code}</option>)}</select></label>
-        <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter}/>
+        <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter} onReading={applyMeterReference}/>
         <label>Leitura atual no ativo (km/horas)<input type="number" min="0" step="0.1" required value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/><small>Obrigatória em toda movimentação de pneus; alimenta o histórico, a vida útil, os KPIs e os relatórios.</small></label>
         
         <label>Custo do evento (R$)<input type="number" min="0" step="0.01" value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/></label>
