@@ -172,3 +172,105 @@
 .tire-stock-item small + small { margin-top:1px; line-height:1.35; white-space:normal; }
 .tire-mounted-badge { background:#e7efff; color:#28569a; }
 .tire-empty-compact { min-height:86px; padding:17px 10px; }
+
+
+/* Fleetwise · abas compactas em estilo pasta, com cores e sombra discreta */
+.tire-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  margin: 18px 0 14px;
+}
+.tire-tabs .tire-tab {
+  --tab-accent: #2563eb;
+  --tab-soft: #eff6ff;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, var(--tab-accent) 24%, white);
+  border-radius: 11px;
+  background: linear-gradient(135deg, #fff 0%, var(--tab-soft) 100%);
+  color: var(--tab-accent);
+  font-size: 12px;
+  font-weight: 750;
+  text-align: left;
+  box-shadow: 0 3px 8px rgba(18, 38, 63, .07), 0 1px 2px rgba(18, 38, 63, .04);
+  transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease;
+}
+.tire-tabs .tire-tab::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: -4px;
+  height: 5px;
+  border-radius: 6px 6px 0 0;
+  background: var(--tab-accent);
+  opacity: .82;
+}
+.tire-tabs .tire-tab:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 7px 15px rgba(18, 38, 63, .12), 0 2px 4px rgba(18, 38, 63, .05);
+}
+.tire-tabs .tire-tab.active {
+  border-color: color-mix(in srgb, var(--tab-accent) 55%, white);
+  background: linear-gradient(135deg, var(--tab-accent), color-mix(in srgb, var(--tab-accent) 78%, #111827));
+  color: #fff;
+  box-shadow: 0 6px 15px color-mix(in srgb, var(--tab-accent) 24%, transparent), inset 0 1px 0 rgba(255,255,255,.2);
+}
+.tire-tabs .tire-tab.active::before { background: color-mix(in srgb, var(--tab-accent) 65%, white); }
+.tire-tabs .tire-tab:nth-child(1) { --tab-accent: #1670df; --tab-soft: #edf6ff; }
+.tire-tabs .tire-tab:nth-child(2) { --tab-accent: #169447; --tab-soft: #effbf3; }
+.tire-tabs .tire-tab:nth-child(3) { --tab-accent: #7c3aed; --tab-soft: #f5f0ff; }
+.tire-tabs .tire-tab:nth-child(4) { --tab-accent: #d97706; --tab-soft: #fff7e9; }
+.tire-tabs .tire-tab:nth-child(5) { --tab-accent: #0891a8; --tab-soft: #eafcff; }
+.tire-tabs .tire-tab svg {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--tab-accent) 12%, white);
+  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, .10));
+}
+.tire-tabs .tire-tab.active svg { background: rgba(255,255,255,.17); }
+.tire-disposal-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 230px));
+  gap: 10px;
+  margin-top: 16px;
+}
+.tire-disposal-action {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 64px;
+  padding: 10px 13px;
+  border: 1px solid;
+  border-radius: 11px;
+  background: #fff;
+  text-align: left;
+  box-shadow: 0 3px 9px rgba(18, 38, 63, .07);
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+.tire-disposal-action:hover { transform: translateY(-2px); box-shadow: 0 7px 15px rgba(18, 38, 63, .12); }
+.tire-disposal-action svg { width: 30px; height: 30px; flex: 0 0 auto; filter: drop-shadow(0 2px 2px rgba(15,23,42,.12)); }
+.tire-disposal-action span { display: flex; flex-direction: column; gap: 4px; }
+.tire-disposal-action strong { font-size: 12px; }
+.tire-disposal-action small { font-size: 10px; opacity: .82; }
+.tire-disposal-action.scrap { color: #dc2626; border-color: #fecaca; background: linear-gradient(135deg,#fff,#fff1f2); }
+.tire-disposal-action.retread { color: #6d28d9; border-color: #ddd6fe; background: linear-gradient(135deg,#fff,#f5f3ff); }
+@media (max-width: 1000px) {
+  .tire-tabs { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
+@media (max-width: 640px) {
+  .tire-tabs { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+  .tire-tabs .tire-tab { min-height: 52px; padding: 10px; font-size: 11px; }
+  .tire-disposal-actions { grid-template-columns: minmax(0,1fr); }
+}
