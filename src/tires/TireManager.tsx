@@ -821,8 +821,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                     if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para recapagem somente um pneu montado neste veículo."); return; }
                     const place = latestPlacement.get(dragged.id);
                     if (place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
-                    setTireDecision({ mode: "trash", draggedTireId: dragged.id, positionId: null, occupantTireId: dragged.id });
-                    setError(""); setNotice("Pneu selecionado para recapagem. Confirme a operação na próxima etapa.");
+                    beginTireWorkflow({ mode: "trash", draggedTireId: dragged.id, positionId: place?.position_id ?? null, occupantTireId: dragged.id }, "retread");
+                    setError("");
                   }} role="button" tabIndex={0} aria-label="Destino de recapagem: arraste um pneu montado aqui">
                     <Recycle size={25}/><span><strong>Enviar para recapagem</strong><small>Arraste um pneu montado para iniciar a retirada e registrar a recapagem</small></span>
                   </div>
@@ -833,8 +833,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                     if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para descarte somente um pneu montado neste veículo."); return; }
                     const place = latestPlacement.get(dragged.id);
                     if (place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
-                    setTireDecision({ mode: "trash", draggedTireId: dragged.id, positionId: null, occupantTireId: dragged.id });
-                    setError(""); setNotice("Pneu selecionado para descarte. Confirme a operação na próxima etapa.");
+                    beginTireWorkflow({ mode: "trash", draggedTireId: dragged.id, positionId: place?.position_id ?? null, occupantTireId: dragged.id }, "scrap");
+                    setError("");
                   }} role="button" tabIndex={0} aria-label="Destino de descarte: arraste um pneu montado aqui">
                     <Trash2 size={25}/><span><strong>Descartar pneu</strong><small>Arraste um pneu montado para registrar a retirada e o descarte</small></span>
                   </div>
