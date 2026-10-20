@@ -147,6 +147,63 @@
 .tire-diagram-help { margin-top: 16px; padding: 13px; border-radius: 10px; background: #f7f9fc; border: 1px solid #e7ebf1; color: #657286; font-size: 11px; line-height: 1.55; }
 .tire-diagram-help strong { display: block; margin-bottom: 8px; color: #2e3c51; font-size: 12px; }
 .tire-diagram-help ol { margin: 0; padding-left: 18px; display: grid; gap: 5px; }
+
+/* Tire layout: keep disposal targets outside the diagram, stacked on its left. */
+.tire-diagram-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 0;
+}
+.tire-diagram-stage .tire-diagram-canvas {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 10px 0 0;
+}
+.tire-diagram-stage .tire-disposal-actions {
+  flex: 0 0 150px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+.tire-diagram-stage .tire-disposal-action {
+  min-width: 0;
+  min-height: 76px;
+  padding: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+.tire-diagram-stage .tire-disposal-action svg {
+  width: 25px;
+  height: 25px;
+}
+.tire-diagram-stage .tire-disposal-action small {
+  line-height: 1.35;
+}
+@media (max-width: 640px) {
+  .tire-diagram-stage {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .tire-diagram-stage .tire-diagram-canvas {
+    width: 100%;
+    flex: auto;
+    margin-top: 10px;
+  }
+  .tire-diagram-stage .tire-disposal-actions {
+    width: 100%;
+    flex: auto;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-top: 0;
+  }
+  .tire-diagram-stage .tire-disposal-action {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
 @media (max-width: 1000px) {
   .tire-layout-workspace { grid-template-columns: minmax(0,1fr); }
   .tire-stock-list { max-height: 260px; }
