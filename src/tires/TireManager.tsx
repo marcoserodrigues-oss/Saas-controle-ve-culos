@@ -332,6 +332,11 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     const next = {...emptyEvent(),tire_id:tireId,vehicle_id:tireId ? eventVehicleContext(tireId) : (tab === "layout" ? (layoutVehicle?.id ?? "") : ""),event_type:defaultType,target_status:"in_stock" as TireStatus};
     const placement = tireId ? latestPlacement.get(tireId) : undefined;
     if (placement) { next.vehicle_id = placement.vehicle_id ?? next.vehicle_id; next.position_id = placement.position_id ?? ""; }
+    if (selected?.status === "retread") {
+      const lastSend = [...events].filter(e => e.tire_id === selected.id && e.event_type === "retread_sent").sort((a,b) => b.occurred_at.localeCompare(a.occurred_at))[0];
+      next.supplier_id = lastSend?.supplier_id ?? "";
+      next.reason = "Retorno da recapagem e entrada no estoque";
+    }
     setEventForm(next); setShowEventForm(true); setError(""); setNotice("");
   }
 
