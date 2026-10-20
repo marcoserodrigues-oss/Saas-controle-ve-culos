@@ -862,13 +862,13 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                     e.preventDefault(); e.stopPropagation();
                     const tireId = e.dataTransfer.getData("text/plain");
                     const dragged = tireMap.get(tireId);
-                    if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para recapagem somente um pneu montado neste veículo."); return; }
+                    if (!layoutReady || !dragged || !["mounted","in_stock"].includes(dragged.status)) { setError("Arraste para recapagem um pneu montado neste veículo ou um pneu disponível em estoque."); return; }
                     const place = latestPlacement.get(dragged.id);
-                    if (place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
+                    if (dragged.status === "mounted" && place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
                     beginTireWorkflow({ mode: "trash", draggedTireId: dragged.id, positionId: place?.position_id ?? null, occupantTireId: dragged.id }, "retread");
                     setError("");
-                  }} role="button" tabIndex={0} aria-label="Destino de recapagem: arraste um pneu montado aqui">
-                    <Recycle size={25}/><span><strong>Enviar para recapagem</strong><small>Arraste um pneu montado para iniciar a retirada e registrar a recapagem</small></span>
+                  }} role="button" tabIndex={0} aria-label="Destino de recapagem: arraste um pneu montado ou em estoque">
+                    <Recycle size={25}/><span><strong>Enviar para recapagem</strong><small>Arraste um pneu montado para desmontar e enviar, ou um pneu em estoque para enviar diretamente</small></span>
                   </div>
                   <div className="tire-disposal-action scrap" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
                     e.preventDefault(); e.stopPropagation();
