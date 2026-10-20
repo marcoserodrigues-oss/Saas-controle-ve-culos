@@ -788,6 +788,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           <div className="tire-layout-workspace">
             <div className="tire-diagram-card panel">
               <div className="tire-diagram-heading"><div><h3>Desenho da montagem</h3><p>Arraste um pneu do estoque para uma posição vazia. Arraste um pneu montado para outra posição para rodízio/troca. Clique em um pneu montado para abrir suas operações.</p></div><span className={layoutReady ? "tire-layout-ready" : "tire-layout-pending"}>{layoutReady ? "Esquema aplicado" : "Prévia do esquema"}</span></div>
+              <div className="tire-diagram-stage">
               <div className={"tire-diagram-canvas tire-diagram-" + selectedLayoutTemplate.diagram_type}>
                 <div className="tire-diagram-direction">{selectedLayoutTemplate.diagram_type === "trailer" ? "FRENTE / ENGATE" : "FRENTE DO VEÍCULO"}</div>
                 <div className="tire-diagram-body" aria-hidden="true"><span/><span/><span/></div>
@@ -813,7 +814,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                   </button>;
                 })}
                 <div className="tire-diagram-legend"><span><i className="legend-occupied"/> Pneu montado</span><span><i className="legend-empty"/> Posição vazia</span><span><i className="legend-inactive"/> Posição inativa</span></div>
-                <div className="tire-disposal-actions">
+
+              </div>
+              <div className="tire-disposal-actions">
                   <div className="tire-disposal-action retread" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
                     e.preventDefault(); e.stopPropagation();
                     const tireId = e.dataTransfer.getData("text/plain");
