@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { Gauge } from "lucide-react";
 import { supabase } from "./supabase";
 
-type Props = { organizationId: string; vehicleId: string; meterKind?: string; initialMeter?: number | null };
+type Props = { organizationId: string; vehicleId: string; meterKind?: string; initialMeter?: number | null; onReading?: (value: number) => void };
 type Reading = { value: number; source: string; at: string | null };
 
-export function VehicleMeterReference({ organizationId, vehicleId, meterKind = "odometer", initialMeter = 0 }: Props) {
+export function VehicleMeterReference({ organizationId, vehicleId, meterKind = "odometer", initialMeter = 0, onReading }: Props) {
   const [reading, setReading] = useState<Reading | null>(null);
   const [loading, setLoading] = useState(false);
   useEffect(() => {
@@ -27,10 +27,10 @@ export function VehicleMeterReference({ organizationId, vehicleId, meterKind = "
       if (orderClose.data && Number.isFinite(Number(orderClose.data.meter_at_close))) rows.push({ value: Number(orderClose.data.meter_at_close), source: "Fechamento de OS", at: orderClose.data.closed_at ?? orderClose.data.opened_at ?? null });
       if (tires.data && Number.isFinite(Number(tires.data.meter_value))) rows.push({ value: Number(tires.data.meter_value), source: "Evento de pneus", at: tires.data.occurred_at ?? null });
       rows.sort((a, b) => b.value - a.value || (b.at ?? "").localeCompare(a.at ?? ""));
-      if (alive) { setReading(rows[0] ?? null); setLoading(false); }
+      if (alive) { const latest = rows[0] ?? null; setReading(latest); if (latest) onReading?.(latest.value); setLoading(false); }
     })().catch(() => { if (alive) { setReading(null); setLoading(false); } });
     return () => { alive = false; };
-  }, [organizationId, vehicleId, meterKind, initialMeter]);
+  }, [organizationId, vehicleId, meterKind, initialMeter, onReading]);
   if (!vehicleId) return null;
   const unit = meterKind === "hourmeter" ? "h" : "km";
   return <div role="status" aria-live="polite" style={{ display: "flex", gap: 9, alignItems: "flex-start", padding: "10px 12px", margin: "0 0 12px", border: "1px solid #bfdbfe", borderRadius: 9, background: "#eff6ff", color: "#1e3a8a", fontSize: 13 }}>
