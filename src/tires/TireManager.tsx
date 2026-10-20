@@ -16,7 +16,7 @@ type Position = { id: string; vehicle_id: string; position_code: string; positio
 type Supplier = { id: string; name: string; supplier_type: string; status: string };
 type TireEvent = { id: string; tire_id: string; vehicle_id: string | null; position_id: string | null; event_type: EventType; occurred_at: string; created_at: string; meter_value: number | null; cost_cents: number; supplier_id: string | null; related_tire_event_id: string | null; notes: string | null; reason: string | null };
 type TireForm = { serial_number: string; brand: string; model: string; size: string; purchase_date: string; purchase_cost: string };
-type EventForm = { tire_id: string; event_type: EventType; occurred_at: string; vehicle_id: string; position_id: string; meter_value: string; cost: string; supplier_id: string; reason: string; notes: string; target_status: TireStatus };
+type EventForm = { tire_id: string; event_type: EventType; occurred_at: string; vehicle_id: string; position_id: string; meter_value: string; cost: string; retread_estimate_cost: string; supplier_id: string; reason: string; notes: string; target_status: TireStatus };
 type PositionForm = { vehicle_id: string; position_code: string; position_label: string };
 type TireDecision = { mode: "replace" | "trash"; draggedTireId: string; positionId: string | null; occupantTireId: string };
 type TireWorkflow = { mode: "replace" | "trash"; action: "stock" | "scrap" | "retread"; oldTireId: string; newTireId: string | null; positionId: string | null; stage: "dismount" | "scrap" | "retread" | "mount" };
@@ -24,7 +24,7 @@ type TireWorkflow = { mode: "replace" | "trash"; action: "stock" | "scrap" | "re
 const localDatePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,10);
 const localDateTimePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,16);
 const emptyTire = (): TireForm => ({ serial_number: "", brand: "", model: "", size: "", purchase_date: localDatePart(), purchase_cost: "" });
-const emptyEvent = (): EventForm => ({ tire_id: "", event_type: "mount", occurred_at: localDateTimePart(), vehicle_id: "", position_id: "", meter_value: "", cost: "", supplier_id: "", reason: "", notes: "", target_status: "in_stock" });
+const emptyEvent = (): EventForm => ({ tire_id: "", event_type: "mount", occurred_at: localDateTimePart(), vehicle_id: "", position_id: "", meter_value: "", cost: "", retread_estimate_cost: "", supplier_id: "", reason: "", notes: "", target_status: "in_stock" });
 const statusLabels: Record<TireStatus,string> = { in_stock: "Em estoque", mounted: "Montado", retread: "Em recapagem", repair: "Em reparo", scrapped: "Descartado", sold: "Vendido" };
 const eventLabels: Record<EventType,string> = { purchase: "Compra / cadastro", mount: "Montagem", dismount: "Desmontagem", rotation: "Rodízio", transfer: "Transferência", retread_sent: "Enviado para remodelagem/recapagem", retread_returned: "Retorno da recapagem / entrada no estoque", repair: "Reparo", inspection: "Inspeção", scrap: "Descarte", adjustment: "Ajuste de status" };
 const eventTypes: EventType[] = ["mount","dismount","rotation","transfer","retread_sent","retread_returned","repair","inspection","scrap","adjustment"];
@@ -569,6 +569,34 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (occupant && occupant !== tire.id && !layoutMoveTarget) { setError("Esta posição já está ocupada por outro pneu. Use o desenho para trocar posições por arrasto, ou desmonte o pneu atual primeiro."); return; }
     }
 
+    if (tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && kind === "dismount") {
+      const estimateCents = toCents(eventForm.retread_estimate_cost);
+      if (!Number.isFinite(estimateCents) || estimateCents < 0) { setError("O custo estimado da recapagem não pode ser negativo."); return; }
+      setSaving(true); setError(""); setNotice("");
+      const result = await supabase.rpc("send_tire_to_retread", {
+        p_tire_id: tire.id,
+        p_vehicle_id: eventForm.vehicle_id,
+        p_meter_value: meter,
+        p_occurred_at: new Date(eventForm.occurred_at).toISOString(),
+        p_dismount_cost_cents: cost,
+        p_retread_estimate_cents: estimateCents,
+        p_supplier_id: eventForm.supplier_id || null,
+        p_reason: eventForm.reason.trim() || null,
+        p_notes: eventForm.notes.trim() || null
+      });
+      if (result.error || !result.data) {
+        setError("Não foi possível registrar a desmontagem e o envio para recapagem. " + (result.error?.message ?? ""));
+      } else {
+        setShowEventForm(false);
+        setLayoutMoveTarget(null);
+        setTireWorkflow(null);
+        setNotice("Desmontagem e envio para recapagem registrados juntos. O pneu agora está Em recapagem.");
+        await load();
+      }
+      setSaving(false);
+      return;
+    }
+
     setSaving(true); setError(""); setNotice("");
     if (placementEvent(kind)) {
       const movement = await supabase.rpc("move_tire_to_position", {
@@ -935,7 +963,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div><div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => setShowTireForm(false)}>Cancelar</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : editingTireId ? "Salvar alterações" : "Cadastrar pneu"}</button></div></form>
     </section></div>}
 
-    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={cancelEventForm} aria-label="Fechar"><X size={18}/></button></div>
+    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">{tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" ? "Desmontar e enviar para recapagem" : "Registrar evento do pneu"}</h3><p>{tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" ? "Uma única confirmação registra a desmontagem e o envio, sem etapa intermediária no estoque." : "O evento entra no histórico e atualiza o status operacional quando aplicável."}</p></div><button className="icon-button" onClick={cancelEventForm} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveEvent}><div className="vehicle-fields tire-event-fields">
         <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? (eventVehicleContext(id) || f.vehicle_id),position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
         <label>Tipo de evento<select required disabled={Boolean(layoutMoveTarget)} value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
@@ -944,7 +972,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter} onReading={applyMeterReference}/>
         <label>Leitura atual no ativo (km/horas)<input type="number" min="0" step="0.1" required value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/><small>Obrigatória em toda movimentação de pneus; alimenta o histórico, a vida útil, os KPIs e os relatórios.</small></label>
         
-        <label>{eventForm.event_type === "retread_returned" ? "Custo final da recapagem (R$)" : eventForm.event_type === "retread_sent" ? "Custo estimado/contratado da recapagem (R$)" : eventForm.event_type === "dismount" ? "Custo da desmontagem (R$)" : "Custo do evento (R$)"}<input type="number" min="0" step="0.01" required={eventForm.event_type === "retread_returned"} value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/>{eventForm.event_type === "retread_returned" && <small>Informe o custo final efetivamente cobrado. Este evento registra a despesa final e devolve o pneu ao estoque.</small>}</label>
+        <label>{eventForm.event_type === "retread_returned" ? "Custo final da recapagem (R$)" : eventForm.event_type === "retread_sent" ? "Custo estimado/contratado da recapagem (R$)" : eventForm.event_type === "dismount" ? "Custo da desmontagem (R$)" : "Custo do evento (R$)"}<input type="number" min="0" step="0.01" required={eventForm.event_type === "retread_returned" || (tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && eventForm.event_type === "dismount")} value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/>{eventForm.event_type === "retread_returned" && <small>Informe o custo final efetivamente cobrado. Este evento registra a despesa final e devolve o pneu ao estoque.</small>}</label>
+        {tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && <label>Custo estimado/contratado da recapagem (R$)<input type="number" min="0" step="0.01" value={eventForm.retread_estimate_cost} onChange={e=>setEventForm(f=>({...f,retread_estimate_cost:e.target.value}))}/><small>Opcional no envio. No retorno será registrado o custo final da nota, sem duplicar a despesa nos relatórios.</small></label>}
         <label>Fornecedor / recapadora<select value={eventForm.supplier_id} onChange={e=>setEventForm(f=>({...f,supplier_id:e.target.value}))}><option value="">Não informado</option>{suppliers.filter(s=>s.status==="active").map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
         
         {needsVehiclePosition && <label>Posição de montagem<select required value={eventForm.position_id} onChange={e=>setEventForm(f=>({...f,position_id:e.target.value}))}><option value="">Selecione...</option>{availableEventPositions.map(p=><option key={p.id} value={p.id}>{p.position_code} · {p.position_label}</option>)}</select></label>}
@@ -953,8 +982,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
         <label className="tire-wide-field">Observações<textarea rows={3} maxLength={1000} value={eventForm.notes} onChange={e=>setEventForm(f=>({...f,notes:e.target.value}))}/></label>
       </div>
       {currentTire && <div className="tire-modal-hint">Status atual: <strong>{statusLabels[currentTire.status]}</strong>{currentLocation?.vehicle_id ? " · Local atual: " + (vehicleMap.get(currentLocation.vehicle_id)?.description ?? "veículo") + (currentLocation.position_id && positionMap.get(currentLocation.position_id) ? " / " + positionMap.get(currentLocation.position_id)!.position_label : "") : ""}</div>}
-      {eventForm.event_type === "dismount" && <div className="tire-modal-hint">A desmontagem será registrada na última posição conhecida, preservando o histórico.</div>}
-      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={cancelEventForm}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : "Registrar no histórico"}</button></div></form>
+      {eventForm.event_type === "dismount" && tireWorkflow?.action !== "retread" && <div className="tire-modal-hint">A desmontagem será registrada na última posição conhecida, preservando o histórico.</div>}
+      {tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && <div className="tire-modal-hint">Ao confirmar, o sistema registra a desmontagem e o envio como eventos vinculados e atualiza o status para <strong>Em recapagem</strong> em uma operação transacional.</div>}
+      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={cancelEventForm}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" ? "Confirmar desmontagem e envio" : "Registrar no histórico"}</button></div></form>
     </section></div>}
 
     {showPositionForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-position-title"><div className="vehicle-form-heading"><div><h3 id="tire-position-title">Nova posição de pneu</h3><p>Cadastre posições conforme os eixos e o layout real do veículo.</p></div><button className="icon-button" onClick={() => setShowPositionForm(false)} aria-label="Fechar"><X size={18}/></button></div>
