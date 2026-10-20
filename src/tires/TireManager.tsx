@@ -150,7 +150,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [notice, setNotice] = useState("");
   const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life" | "layout">("inventory");
   const [search, setSearch] = useState("");
-  const [reportVehicleId, setReportVehicleId] = useState("");
+  const [historyVehicleId, setHistoryVehicleId] = useState("");
+  const [lifeVehicleId, setLifeVehicleId] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showTireForm, setShowTireForm] = useState(false);
   const [editingTireId, setEditingTireId] = useState<string | null>(null);
@@ -218,19 +219,26 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
       const place = latestPlacement.get(t.id);
       const vehicle = place?.vehicle_id ? vehicleMap.get(place.vehicle_id) : null;
-      if (reportVehicleId && place?.vehicle_id !== reportVehicleId && !events.some(event => event.tire_id === t.id && event.vehicle_id === reportVehicleId)) return false;
       return !term || [t.serial_number,t.brand ?? "",t.model ?? "",t.size,vehicle?.description ?? "",vehicle?.plate ?? ""].some(v => v.toLocaleLowerCase("pt-BR").includes(term));
     });
-  }, [tires,search,statusFilter,reportVehicleId,latestPlacement,vehicleMap,events]);
+  }, [tires,search,statusFilter,latestPlacement,vehicleMap]);
+  const filteredLifeTires = useMemo(() => {
+    if (!lifeVehicleId) return filteredTires;
+    return filteredTires.filter(t => {
+      const place = latestPlacement.get(t.id);
+      return place?.vehicle_id === lifeVehicleId
+        || events.some(event => event.tire_id === t.id && event.vehicle_id === lifeVehicleId);
+    });
+  }, [filteredTires,lifeVehicleId,latestPlacement,events]);
   const filteredEvents = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return events.filter(e => {
       const t = tireMap.get(e.tire_id);
       const v = e.vehicle_id ? vehicleMap.get(e.vehicle_id) : null;
-      if (reportVehicleId && e.vehicle_id !== reportVehicleId) return false;
+      if (historyVehicleId && e.vehicle_id !== historyVehicleId) return false;
       return !term || [t?.serial_number ?? "",t?.size ?? "",v?.description ?? "",v?.plate ?? "",eventLabels[e.event_type],e.reason ?? "",e.notes ?? ""].some(x => x.toLocaleLowerCase("pt-BR").includes(term));
     });
-  }, [events,search,reportVehicleId,tireMap,vehicleMap]);
+  }, [events,search,historyVehicleId,tireMap,vehicleMap]);
 
   const startNewTire = () => { setEditingTireId(null); setTireForm(emptyTire()); setShowTireForm(true); setError(""); setNotice(""); };
   const startEditTire = (t: Tire) => {
@@ -683,7 +691,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     return !term || [t.serial_number,t.brand ?? "",t.model ?? "",t.size,sourceVehicle?.description ?? "",sourceVehicle?.plate ?? "",sourcePosition?.position_label ?? "",sourcePosition?.position_code ?? ""].some(v => v.toLocaleLowerCase("pt-BR").includes(term));
   }) : [];
 
-  const lifeMetricsForFiltered = filteredTires.map(t => lifeReport.get(t.id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
+  const lifeMetricsForFiltered = filteredLifeTires.map(t => lifeReport.get(t.id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
   const lifeTotalCostCents = lifeMetricsForFiltered.reduce((sum, r) => sum + r.totalCostCents, 0);
   const lifeTotalKm = lifeMetricsForFiltered.reduce((sum, r) => sum + r.km, 0);
   const lifeTotalRetreads = lifeMetricsForFiltered.reduce((sum, r) => sum + r.retreadCount, 0);
@@ -713,7 +721,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     </div>
     <div className="tire-list-toolbar">
       <label className="tire-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "history" ? "Buscar pneu, veículo ou evento..." : tab === "life" ? "Buscar no relatório de vida útil..." : "Buscar série, medida ou veículo..."}/></label>
-      {(tab === "history" || tab === "life") && <select value={reportVehicleId} onChange={e => setReportVehicleId(e.target.value)} aria-label="Filtrar relatório por veículo"><option value="">Todos os veículos</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : ""}</option>)}</select>}
+      {tab === "history" && <select value={historyVehicleId} onChange={e => setHistoryVehicleId(e.target.value)} aria-label="Filtrar histórico por veículo"><option value="">Todos os veículos</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : ""}</option>)}</select>}
+      {tab === "life" && <select value={lifeVehicleId} onChange={e => setLifeVehicleId(e.target.value)} aria-label="Filtrar vida útil por veículo (opcional)"><option value="">Todos os pneus (sem filtro por veículo)</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : ""}</option>)}</select>}
       {(tab === "inventory" || tab === "life") && <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filtrar por status"><option value="all">Todos os status</option>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>}
       {tab === "positions" && <button className="primary-button" onClick={() => {setPositionForm({vehicle_id:vehicles[0]?.id ?? "",position_code:"",position_label:""});setShowPositionForm(true);setError("");}}><Plus size={16}/> Nova posição</button>}
     </div>
@@ -851,7 +860,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div>}
 
       {tab === "life" && <div className="tire-life-report">
-        <div className="tire-life-heading"><div><h3>Relatório de vida útil dos pneus</h3><p>Custos, recapagens e projeções calculados somente com os eventos e leituras registrados.</p></div></div>
+        <div className="tire-life-heading"><div><h3>Relatório de vida útil dos pneus</h3><p>Consulta individual por pneu. O filtro por veículo é opcional e considera também pneus que já passaram por esse veículo.</p></div></div>
         <div className="tire-kpis">
           <article className="tire-kpi"><span>Custo total registrado</span><strong>{brl(lifeTotalCostCents)}</strong><small>Compra + demais eventos de custo</small></article>
           <article className="tire-kpi"><span>Envios para recapagem</span><strong>{lifeTotalRetreads.toLocaleString("pt-BR")}</strong><small>Custo lançado: {brl(lifeRetreadCostCents)}</small></article>
@@ -859,8 +868,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           <article className="tire-kpi"><span>Previsões disponíveis</span><strong>{lifeForecastCount.toLocaleString("pt-BR")}</strong><small>Exige histórico de ciclos confiável</small></article>
         </div>
         <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Pneu / medida</th><th>Status</th><th>Ciclos encerrados</th><th>Km registrados</th><th>Média km/ciclo</th><th>Dias em ciclos concluídos</th><th>Montagem atual</th><th>Último encerramento</th><th>Recapagens</th><th>Custo total</th><th>Custo/km (reg.)</th><th>Km restantes (estim.)</th></tr></thead><tbody>
-          {filteredTires.map(t => {const r=lifeReport.get(t.id);const place=latestPlacement.get(t.id);const v=place?.vehicle_id?vehicleMap.get(place.vehicle_id):null;return <tr key={t.id}><td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{t.size}</small></div></td><td><span className={"tire-status tire-status-"+t.status}>{statusLabels[t.status] ?? t.status}</span></td><td>{(r?.cycles ?? 0).toLocaleString("pt-BR")}</td><td>{(r?.km ?? 0).toLocaleString("pt-BR")} km</td><td>{r?.averageKmPerCycle == null ? "—" : Math.round(r.averageKmPerCycle).toLocaleString("pt-BR") + " km"}</td><td>{(r?.completedDays ?? 0).toLocaleString("pt-BR")} dias</td><td>{t.status==="mounted"?(r?.activeDays ?? 0).toLocaleString("pt-BR")+" dias": "—"}<small className="tire-table-sub">{t.status==="mounted"?(v?.description ?? "Montado"): ""}</small></td><td>{dateLabel(r?.lastEndAt ?? null)}</td><td>{(r?.retreadCount ?? 0).toLocaleString("pt-BR")}</td><td>{brl(r?.totalCostCents ?? 0)}</td><td>{r?.costPerKmCents == null ? "—" : brl(r.costPerKmCents) + "/km"}</td><td>{r?.estimatedKmRemaining == null ? "—" : Math.round(r.estimatedKmRemaining).toLocaleString("pt-BR") + " km"}</td></tr>;})}
-          {!filteredTires.length && <tr><td colSpan={12}><div className="tire-empty"><History size={22}/><strong>Nenhum pneu encontrado</strong><span>Ajuste a pesquisa ou cadastre pneus e eventos.</span></div></td></tr>}
+          {filteredLifeTires.map(t => {const r=lifeReport.get(t.id);const place=latestPlacement.get(t.id);const v=place?.vehicle_id?vehicleMap.get(place.vehicle_id):null;return <tr key={t.id}><td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{t.size}</small></div></td><td><span className={"tire-status tire-status-"+t.status}>{statusLabels[t.status] ?? t.status}</span></td><td>{(r?.cycles ?? 0).toLocaleString("pt-BR")}</td><td>{(r?.km ?? 0).toLocaleString("pt-BR")} km</td><td>{r?.averageKmPerCycle == null ? "—" : Math.round(r.averageKmPerCycle).toLocaleString("pt-BR") + " km"}</td><td>{(r?.completedDays ?? 0).toLocaleString("pt-BR")} dias</td><td>{t.status==="mounted"?(r?.activeDays ?? 0).toLocaleString("pt-BR")+" dias": "—"}<small className="tire-table-sub">{t.status==="mounted"?(v?.description ?? "Montado"): ""}</small></td><td>{dateLabel(r?.lastEndAt ?? null)}</td><td>{(r?.retreadCount ?? 0).toLocaleString("pt-BR")}</td><td>{brl(r?.totalCostCents ?? 0)}</td><td>{r?.costPerKmCents == null ? "—" : brl(r.costPerKmCents) + "/km"}</td><td>{r?.estimatedKmRemaining == null ? "—" : Math.round(r.estimatedKmRemaining).toLocaleString("pt-BR") + " km"}</td></tr>;})}
+          {!filteredLifeTires.length && <tr><td colSpan={12}><div className="tire-empty"><History size={22}/><strong>Nenhum pneu encontrado</strong><span>Ajuste a pesquisa ou o filtro opcional por veículo.</span></div></td></tr>}
         </tbody></table></div>
         <p className="tire-footnote">O custo total soma o preço de aquisição com os custos lançados nos demais eventos, sem duplicar o evento inicial de compra. O custo/km usa apenas a quilometragem registrada; leituras ausentes podem tornar esse indicador incompleto.</p><p className="tire-footnote">A estimativa de km restantes só aparece com pelo menos dois ciclos concluídos com leituras completas e leituras válidas no ciclo atual. É uma referência baseada no histórico, não uma garantia de vida útil; confirme desgaste por inspeção física e orientação do fabricante.</p>
       </div>} 
