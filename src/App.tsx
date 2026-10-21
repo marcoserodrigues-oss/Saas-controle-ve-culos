@@ -10,7 +10,7 @@ import { ExpensesManager } from "./expenses/ExpensesManager";
 import { PeopleManager } from "./people/PeopleManager";
 import {
   AlertTriangle, ArrowUpRight, Bell,
-  CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel, Gauge,
+  CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel,
   LayoutDashboard, Menu, Package, Search, Settings, ShieldCheck, Truck,
   Wrench, CircleDot, FileBarChart, Users, X
 } from "lucide-react";
