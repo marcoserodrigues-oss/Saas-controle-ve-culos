@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { VehicleManager } from "./vehicles/VehicleManager";
 import { FuelManager } from "./fuel/FuelManager";
@@ -62,6 +62,38 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
       // Navigation still works when browser storage is unavailable.
     }
   }, [activeModule]);
+  const navigateToModule = useCallback((nextModule: ModuleId) => {
+    try {
+      sessionStorage.setItem("nexuscode:scroll:" + activeModule, String(window.scrollY));
+    } catch {
+      // Navigation remains available if browser storage is unavailable.
+    }
+    setActiveModule(nextModule);
+  }, [activeModule]);
+
+  useEffect(() => {
+    let savedScroll = 0;
+    try {
+      savedScroll = Number(sessionStorage.getItem("nexuscode:scroll:" + activeModule) || 0);
+    } catch {
+      savedScroll = 0;
+    }
+    // Wait for the newly visible module to participate in layout before restoring its position.
+    requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, savedScroll), behavior: "instant" as ScrollBehavior }));
+  }, [activeModule]);
+
+  useEffect(() => {
+    const saveScroll = () => {
+      try {
+        sessionStorage.setItem("nexuscode:scroll:" + activeModule, String(window.scrollY));
+      } catch {
+        // Scroll memory is an enhancement; it must not interrupt normal use.
+      }
+    };
+    window.addEventListener("scroll", saveScroll, { passive: true });
+    return () => window.removeEventListener("scroll", saveScroll);
+  }, [activeModule]);
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
   const activeItem = navigation.find((item) => item.id === activeModule)!;
@@ -85,7 +117,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
               <p className="nav-heading">{group}</p>
               {navigation.filter((item) => item.group === group).map((item) => {
                 const Icon = item.icon;
-                return <button key={item.id} className={`nav-item ${activeModule === item.id ? "nav-item-active" : ""}`} onClick={() => { if (activeModule !== item.id && hasPendingFormChanges && !window.confirm("Há um cadastro ou alteração em andamento. Se sair deste módulo, o rascunho será mantido para você continuar depois. Deseja trocar de módulo?")) return; setActiveModule(item.id); setMobileNavOpen(false); setHasPendingFormChanges(false); }}>
+                return <button key={item.id} className={`nav-item ${activeModule === item.id ? "nav-item-active" : ""}`} onClick={() => { if (activeModule !== item.id && hasPendingFormChanges && !window.confirm("Há um cadastro ou alteração em andamento. Se sair deste módulo, o rascunho será mantido para você continuar depois. Deseja trocar de módulo?")) return; navigateToModule(item.id); setMobileNavOpen(false); setHasPendingFormChanges(false); }}>
                   <Icon size={18} strokeWidth={1.8} /><span>{item.label}</span>
                   {item.id === "tires" && <span className="nav-dot" />}
                 </button>;
@@ -94,8 +126,8 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>Precisa de ajuda?</strong><p>Consulte a documentação e as regras do sistema.</p><button onClick={() => setActiveModule("reports")}>Ver orientações <span>↗</span></button></div>
-          <button className="nav-item settings-item" onClick={() => setActiveModule("people")}><Settings size={18} /><span>Configurações</span></button>
+          <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>Precisa de ajuda?</strong><p>Consulte a documentação e as regras do sistema.</p><button onClick={() => navigateToModule("reports")}>Ver orientações <span>↗</span></button></div>
+          <button className="nav-item settings-item" onClick={() => navigateToModule("people")}><Settings size={18} /><span>Configurações</span></button>
           <div className="user-profile"><div className="user-avatar">{userInitials}</div><div className="user-copy"><strong>{userDisplayName}</strong><span>{userEmail ?? "Conta autenticada"}</span></div><ChevronDown size={16} className="muted" /></div>
         </div>
       </aside>
@@ -118,7 +150,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
           {organizationId ? <>
-            <div hidden={activeModule !== "dashboard"}><Dashboard organizationId={organizationId} onNavigate={setActiveModule} /></div>
+            <div hidden={activeModule !== "dashboard"}><Dashboard organizationId={organizationId} onNavigate={navigateToModule} /></div>
             <div hidden={activeModule !== "vehicles"}><VehicleManager organizationId={organizationId} /></div>
             <div hidden={activeModule !== "fuel"}><FuelManager organizationId={organizationId} /></div>
             <div hidden={activeModule !== "maintenance"}><MaintenanceManager organizationId={organizationId} /></div>
