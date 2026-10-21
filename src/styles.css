@@ -331,3 +331,10 @@
   .tire-tabs .tire-tab { min-height: 52px; padding: 10px; font-size: 11px; }
   .tire-disposal-actions { grid-template-columns: minmax(0,1fr); }
 }
+
+
+/* NexusCode login logo: keep the horizontal mark inside the auth card and out of the form's hit area. */
+.auth-card{position:relative;z-index:1;overflow:hidden;min-width:0}
+.auth-mark{width:100%;max-width:260px;height:auto;min-height:0;aspect-ratio:auto;display:flex;align-items:center;justify-content:center;margin:0 auto 22px;padding:0;background:transparent;border-radius:0;box-shadow:none;position:relative;z-index:0;overflow:hidden}
+.auth-mark img{display:block;width:100%;max-width:260px;height:auto;max-height:95px;object-fit:contain;object-position:center;position:static;z-index:0;pointer-events:none}
+@media(max-width:480px){.auth-screen{padding:16px}.auth-card{padding:24px;width:100%;max-width:410px}.auth-mark{max-width:230px;margin-bottom:18px}.auth-mark img{max-width:230px;max-height:84px}}
