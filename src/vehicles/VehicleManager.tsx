@@ -10,13 +10,13 @@ type FuelType = "diesel" | "gasoline" | "ethanol" | "gnv" | "electric" | "other"
 type LayoutPosition = { code: string; label: string; axle: number; side: string; slot: string; x: number; y: number };
 type LayoutTemplate = { id: string; organization_id: string | null; code: string; name: string; asset_kind: VehicleKind; diagram_type: string; axle_count: number; tire_count: number; description: string | null; layout: LayoutPosition[]; is_system: boolean; is_active: boolean };
 type VehicleRecord = {
-  id: string; code: string; plate: string | null; description: string; initial_meter: number; tire_layout_template_id: string | null;
+  id: string; code: string; plate: string | null; description: string; initial_meter: number; tire_layout_template_id: string | null; default_driver_id: string | null;
   kind: VehicleKind; meter_kind: MeterKind; fuel_type: FuelType;
   make: string | null; model: string | null; model_year: number | null; vin: string | null;
   status: "active" | "inactive" | "cancelled"; created_at: string;
 };
 
-const emptyForm = { code: "", description: "", plate: "", vin: "", kind: "vehicle" as VehicleKind, meter_kind: "odometer" as MeterKind, initial_meter: "", fuel_type: "diesel" as FuelType, make: "", model: "", model_year: "", tire_layout_template_id: "" };
+const emptyForm = { code: "", description: "", plate: "", vin: "", default_driver_id: "", kind: "vehicle" as VehicleKind, meter_kind: "odometer" as MeterKind, initial_meter: "", fuel_type: "diesel" as FuelType, make: "", model: "", model_year: "", tire_layout_template_id: "" };
 
 type VehicleDraft = { organizationId: string; form: typeof emptyForm; showForm: boolean; editingId: string | null };
 
@@ -107,6 +107,7 @@ async function generateVehicleCode(organizationId: string, prefix: "VEI" | "EQP"
 export function VehicleManager({ organizationId }: { organizationId: string }) {
   const [vehicles, setVehicles] = useState<VehicleRecord[]>([]);
   const [layoutTemplates, setLayoutTemplates] = useState<LayoutTemplate[]>([]);
+  const [drivers, setDrivers] = useState<{id:string;name:string;status:string}[]>([]);
   const [initialDraft] = useState(() => readVehicleDraft(organizationId));
   const [form, setForm] = useState(initialDraft?.form ?? emptyForm);
   const [showForm, setShowForm] = useState(initialDraft?.showForm ?? false);
@@ -134,9 +135,9 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
     if (!supabase) return;
     setLoading(true);
     setError("");
-    const [vehicleResult, templateResult] = await Promise.all([
+    const [vehicleResult, templateResult, driverResult] = await Promise.all([
       supabase.from("vehicles")
-        .select("id, code, plate, description, kind, meter_kind, initial_meter, fuel_type, make, model, model_year, vin, status, created_at, tire_layout_template_id")
+        .select("id, code, plate, description, kind, meter_kind, initial_meter, fuel_type, make, model, model_year, vin, status, created_at, tire_layout_template_id, default_driver_id")
         .eq("organization_id", organizationId)
         .order("created_at", { ascending: false }),
       supabase.from("tire_layout_templates")
@@ -144,13 +145,15 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
         .eq("is_active", true)
         .or("organization_id.is.null,organization_id.eq." + organizationId)
         .order("is_system", { ascending: false })
-        .order("name")
+        .order("name"),
+      supabase.from("drivers").select("id,name,status").eq("organization_id", organizationId).eq("status", "active").order("name")
     ]);
     if (vehicleResult.error) {
       setError("Não foi possível consultar os veículos. Verifique a conexão, a migração e as permissões RLS.");
       setVehicles([]);
     } else {
       setVehicles((vehicleResult.data ?? []) as unknown as VehicleRecord[]);
+      setDrivers((driverResult.data ?? []) as {id:string;name:string;status:string}[]);
     }
     if (templateResult.error) {
       setLayoutTemplates([]);
@@ -180,6 +183,7 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
     const payloadBase = {
       organization_id: organizationId,
       tire_layout_template_id: form.tire_layout_template_id || null,
+      default_driver_id: form.default_driver_id || null,
       initial_meter: initialMeter,
       description: form.description.trim(),
       plate: form.plate.trim().toUpperCase() || null,
@@ -273,6 +277,7 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
         <label>Placa<input maxLength={12} value={form.plate} onChange={(e) => setForm({ ...form, plate: e.target.value })} placeholder="ABC1D23" /></label>
         <label>Chassi / VIN<input maxLength={40} value={form.vin} onChange={(e) => setForm({ ...form, vin: e.target.value })} placeholder="Identificação do fabricante" /></label>
         <label>Tipo<select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as VehicleKind, meter_kind: e.target.value === "equipment" ? "hourmeter" : "odometer", tire_layout_template_id: "" })}><option value="vehicle">Veículo</option><option value="equipment">Equipamento</option></select></label>
+        <label>Motorista responsável (opcional)<select value={form.default_driver_id} onChange={(e) => setForm({ ...form, default_driver_id: e.target.value })}><option value="">Sem motorista fixo</option>{drivers.map(driver => <option key={driver.id} value={driver.id}>{driver.name}</option>)}</select><small style={{ color: "#64748b", fontWeight: 400 }}>Será sugerido automaticamente nas novas autorizações de abastecimento.</small></label>
         <label>Esquema de montagem dos pneus<select value={form.tire_layout_template_id} onChange={(e) => setForm({ ...form, tire_layout_template_id: e.target.value })}><option value="">Sem esquema definido</option>{layoutTemplates.filter(t => t.asset_kind === form.kind).map(t => <option key={t.id} value={t.id}>{t.name} · {t.tire_count} posições</option>)}</select><small style={{ color: "#64748b", fontWeight: 400 }}>O esquema cria as posições de pneus depois de salvar, sem apagar posições ou histórico existentes.</small></label>
         <label>Leitura inicial *<input type="number" required min="0" step="0.01" value={form.initial_meter} onChange={(e) => setForm({ ...form, initial_meter: e.target.value })} placeholder={form.kind === "equipment" ? "Horímetro atual" : "Odômetro atual"} /><small style={{ color: "#64748b", fontWeight: 400 }}>Será a referência para validar leituras em abastecimentos, pneus e manutenção.</small></label>
         <label>Medidor<select value={form.meter_kind} onChange={(e) => setForm({ ...form, meter_kind: e.target.value as MeterKind })}><option value="odometer">Hodômetro (km)</option><option value="hourmeter">Horímetro (h)</option></select></label>
@@ -284,6 +289,6 @@ export function VehicleManager({ organizationId }: { organizationId: string }) {
       <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}>Cancelar</button><button type="submit" className="primary-button" disabled={saving}>{saving ? "Salvando..." : editingId ? "Salvar alterações" : "Salvar cadastro"}</button></div>
     </form>}
     <div className="vehicle-list-toolbar"><label className="vehicle-search"><Search size={15} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por código, placa, descrição ou modelo" /></label><span>{filtered.length} {filtered.length === 1 ? "registro" : "registros"}</span></div>
-    {loading ? <div className="vehicle-empty"><RefreshCw size={22} /><strong>Carregando cadastros...</strong></div> : filtered.length === 0 ? <div className="vehicle-empty"><div className="vehicle-empty-icon"><Truck size={24} /></div><strong>{search ? "Nenhum resultado para essa busca" : "Nenhum ativo cadastrado"}</strong><p>{search ? "Tente pesquisar com outro código ou placa." : "Cadastre o primeiro veículo ou equipamento para começar a construir o histórico operacional."}</p>{!search && <button className="primary-button" onClick={() => setShowForm(true)}><Plus size={15} /> Cadastrar primeiro ativo</button>}</div> : <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Ativo</th><th>Tipo</th><th>Medidor</th><th>Combustível</th><th>Status</th><th>Ações</th></tr></thead><tbody>{filtered.map((vehicle) => <tr key={vehicle.id}><td><div className="vehicle-name"><span className="vehicle-row-icon"><Truck size={16} /></span><span><strong>{vehicle.description}</strong><small>{vehicle.code}{vehicle.plate ? " · "+vehicle.plate : ""}</small></span></div></td><td>{vehicle.kind === "equipment" ? "Equipamento" : "Veículo"}</td><td>{vehicle.meter_kind === "hourmeter" ? "Horímetro (h)" : "Hodômetro (km)"}</td><td>{({ diesel:"Diesel", gasoline:"Gasolina", ethanol:"Etanol", gnv:"GNV", electric:"Elétrico", other:"Outro" } as Record<FuelType,string>)[vehicle.fuel_type]}</td><td><span className={`vehicle-status ${vehicle.status}`}>{vehicle.status === "active" ? "Ativo" : vehicle.status === "inactive" ? "Inativo" : "Cancelado"}</span></td><td><div className="vehicle-row-actions"><button type="button" className="icon-button" aria-label={`Editar ${vehicle.description}`} title="Editar cadastro" onClick={() => { setForm({ code: vehicle.code, description: vehicle.description, plate: vehicle.plate ?? "", vin: vehicle.vin ?? "", kind: vehicle.kind, meter_kind: vehicle.meter_kind, fuel_type: vehicle.fuel_type, make: vehicle.make ?? "", model: vehicle.model ?? "", model_year: vehicle.model_year == null ? "" : String(vehicle.model_year), initial_meter: String(vehicle.initial_meter ?? 0), tire_layout_template_id: vehicle.tire_layout_template_id ?? "" }); setEditingId(vehicle.id); setShowForm(true); setError(""); setNotice(""); }}><Pencil size={15} /></button>{vehicle.status !== "cancelled" && <button type="button" className="icon-button" aria-label={vehicle.status === "active" ? `Inativar ${vehicle.description}` : `Reativar ${vehicle.description}`} title={vehicle.status === "active" ? "Inativar sem apagar histórico" : "Reativar cadastro"} onClick={async () => { if (!supabase) return; setError(""); setNotice(""); const nextStatus = vehicle.status === "active" ? "inactive" : "active"; const { data: updatedVehicle, error: statusError } = await supabase.from("vehicles").update({ status: nextStatus }).eq("id", vehicle.id).eq("organization_id", organizationId).select("id").maybeSingle(); if (statusError) { setError("Não foi possível alterar o status deste ativo."); } else if (!updatedVehicle) { setError("A alteração de status não foi confirmada. Atualize a lista e tente novamente."); } else { setNotice(nextStatus === "inactive" ? "Ativo inativado; o histórico foi preservado." : "Ativo reativado."); await loadVehicles(); } }}><Power size={15} /></button>}</div></td></tr>)}</tbody></table></div>}
+    {loading ? <div className="vehicle-empty"><RefreshCw size={22} /><strong>Carregando cadastros...</strong></div> : filtered.length === 0 ? <div className="vehicle-empty"><div className="vehicle-empty-icon"><Truck size={24} /></div><strong>{search ? "Nenhum resultado para essa busca" : "Nenhum ativo cadastrado"}</strong><p>{search ? "Tente pesquisar com outro código ou placa." : "Cadastre o primeiro veículo ou equipamento para começar a construir o histórico operacional."}</p>{!search && <button className="primary-button" onClick={() => setShowForm(true)}><Plus size={15} /> Cadastrar primeiro ativo</button>}</div> : <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Ativo</th><th>Tipo</th><th>Medidor</th><th>Combustível</th><th>Status</th><th>Ações</th></tr></thead><tbody>{filtered.map((vehicle) => <tr key={vehicle.id}><td><div className="vehicle-name"><span className="vehicle-row-icon"><Truck size={16} /></span><span><strong>{vehicle.description}</strong><small>{vehicle.code}{vehicle.plate ? " · "+vehicle.plate : ""}</small></span></div></td><td>{vehicle.kind === "equipment" ? "Equipamento" : "Veículo"}</td><td>{vehicle.meter_kind === "hourmeter" ? "Horímetro (h)" : "Hodômetro (km)"}</td><td>{({ diesel:"Diesel", gasoline:"Gasolina", ethanol:"Etanol", gnv:"GNV", electric:"Elétrico", other:"Outro" } as Record<FuelType,string>)[vehicle.fuel_type]}</td><td><span className={`vehicle-status ${vehicle.status}`}>{vehicle.status === "active" ? "Ativo" : vehicle.status === "inactive" ? "Inativo" : "Cancelado"}</span></td><td><div className="vehicle-row-actions"><button type="button" className="icon-button" aria-label={`Editar ${vehicle.description}`} title="Editar cadastro" onClick={() => { setForm({ code: vehicle.code, description: vehicle.description, plate: vehicle.plate ?? "", vin: vehicle.vin ?? "", default_driver_id: vehicle.default_driver_id ?? "", kind: vehicle.kind, meter_kind: vehicle.meter_kind, fuel_type: vehicle.fuel_type, make: vehicle.make ?? "", model: vehicle.model ?? "", model_year: vehicle.model_year == null ? "" : String(vehicle.model_year), initial_meter: String(vehicle.initial_meter ?? 0), tire_layout_template_id: vehicle.tire_layout_template_id ?? "" }); setEditingId(vehicle.id); setShowForm(true); setError(""); setNotice(""); }}><Pencil size={15} /></button>{vehicle.status !== "cancelled" && <button type="button" className="icon-button" aria-label={vehicle.status === "active" ? `Inativar ${vehicle.description}` : `Reativar ${vehicle.description}`} title={vehicle.status === "active" ? "Inativar sem apagar histórico" : "Reativar cadastro"} onClick={async () => { if (!supabase) return; setError(""); setNotice(""); const nextStatus = vehicle.status === "active" ? "inactive" : "active"; const { data: updatedVehicle, error: statusError } = await supabase.from("vehicles").update({ status: nextStatus }).eq("id", vehicle.id).eq("organization_id", organizationId).select("id").maybeSingle(); if (statusError) { setError("Não foi possível alterar o status deste ativo."); } else if (!updatedVehicle) { setError("A alteração de status não foi confirmada. Atualize a lista e tente novamente."); } else { setNotice(nextStatus === "inactive" ? "Ativo inativado; o histórico foi preservado." : "Ativo reativado."); await loadVehicles(); } }}><Power size={15} /></button>}</div></td></tr>)}</tbody></table></div>}
   </section>;
 }
