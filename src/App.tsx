@@ -70,8 +70,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
       {mobileNavOpen && <button className="mobile-scrim" aria-label="Fechar menu" onClick={() => setMobileNavOpen(false)} />}
       <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark"><Gauge size={23} strokeWidth={2.4} /></div>
-          <div><strong>NexusCode</strong><small>GESTÃO DE VEÍCULOS</small></div>
+          <img className="brand-logo" src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" />
           <button className="icon-button close-nav" onClick={() => setMobileNavOpen(false)} aria-label="Fechar menu"><X size={18} /></button>
         </div>
         <div className="company-switcher">
