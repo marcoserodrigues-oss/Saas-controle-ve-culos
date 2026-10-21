@@ -46,6 +46,7 @@ function formatToday() {
 function App({ organizationId, organizationName, userEmail }: { organizationId?: string | null; organizationName?: string | null; userEmail?: string | null } = {}) {
   const userDisplayName = userEmail?.split("@")[0]?.replace(/[._-]+/g, " ") || "Usuário";
   const userInitials = userDisplayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "US";
+  const [hasPendingFormChanges, setHasPendingFormChanges] = useState(false);
   const [activeModule, setActiveModule] = useState<ModuleId>(() => {
     try {
       const saved = sessionStorage.getItem("fleetwise:activeModule");
@@ -84,7 +85,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
               <p className="nav-heading">{group}</p>
               {navigation.filter((item) => item.group === group).map((item) => {
                 const Icon = item.icon;
-                return <button key={item.id} className={`nav-item ${activeModule === item.id ? "nav-item-active" : ""}`} onClick={() => { setActiveModule(item.id); setMobileNavOpen(false); }}>
+                return <button key={item.id} className={`nav-item ${activeModule === item.id ? "nav-item-active" : ""}`} onClick={() => { if (activeModule !== item.id && hasPendingFormChanges && !window.confirm("Há um cadastro ou alteração em andamento. Se sair deste módulo, o rascunho será mantido para você continuar depois. Deseja trocar de módulo?")) return; setActiveModule(item.id); setMobileNavOpen(false); setHasPendingFormChanges(false); }}>
                   <Icon size={18} strokeWidth={1.8} /><span>{item.label}</span>
                   {item.id === "tires" && <span className="nav-dot" />}
                 </button>;
@@ -99,7 +100,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
         </div>
       </aside>
 
-      <main className="main-content">
+      <main className="main-content" onChange={(event) => { const target = event.target as HTMLElement; if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) setHasPendingFormChanges(true); }}>
         <header className="topbar">
           <div className="topbar-left"><button className="icon-button mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menu"><Menu size={20} /></button><div className="breadcrumb">Frota <span>/</span> <strong>{activeItem.label}</strong></div></div>
           <div className="topbar-actions">
