@@ -348,7 +348,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     if (oldTire.status === "mounted") {
       setTireWorkflow({ mode: decision.mode, action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage: "dismount" });
       const place = latestPlacement.get(oldTire.id);
-      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: "dismount", vehicle_id: place?.vehicle_id ?? "", position_id: place?.position_id ?? "", reason: decision.mode === "replace" ? "Substituição pelo layout visual" : "Retirada pelo layout visual" });
+      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: "dismount", vehicle_id: place?.vehicle_id ?? layoutVehicle?.id ?? "", position_id: place?.position_id ?? "", reason: decision.mode === "replace" ? "Substituição pelo layout visual" : action === "retread" ? "Desmontagem para envio à recapagem pelo layout visual" : action === "scrap" ? "Desmontagem para descarte pelo layout visual" : "Retirada pelo layout visual" });
       setLayoutMoveTarget(null);
       setShowEventForm(true);
       setTireDecision(null);
@@ -634,6 +634,15 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (updated.error || !updated.data) {
         setError("O evento foi salvo no histórico, mas não foi possível atualizar o status do pneu. Atualize a tela e confira o item.");
       } else if (tireWorkflow && ((tireWorkflow.stage === "dismount" && kind === "dismount") || (tireWorkflow.stage === "scrap" && kind === "scrap") || (tireWorkflow.stage === "retread" && kind === "retread_sent"))) {
+        // Atualiza o estado local antes de avançar o fluxo: continueTireWorkflowAfterSave
+        // abre a etapa seguinte e ela precisa enxergar o status novo, não o status antigo.
+        if (kind === "dismount") {
+          setTires(current => current.map(item => item.id === tire.id ? { ...item, status: "in_stock" } : item));
+        } else if (kind === "scrap") {
+          setTires(current => current.map(item => item.id === tire.id ? { ...item, status: "scrapped" } : item));
+        } else if (kind === "retread_sent") {
+          setTires(current => current.map(item => item.id === tire.id ? { ...item, status: "retread" } : item));
+        }
         await load();
         continueTireWorkflowAfterSave();
       } else {
