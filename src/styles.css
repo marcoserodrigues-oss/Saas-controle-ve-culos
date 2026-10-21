@@ -338,3 +338,10 @@
 .auth-mark{width:100%;max-width:260px;height:auto;min-height:0;aspect-ratio:auto;display:flex;align-items:center;justify-content:center;margin:0 auto 22px;padding:0;background:transparent;border-radius:0;box-shadow:none;position:relative;z-index:0;overflow:hidden}
 .auth-mark img{display:block;width:100%;max-width:260px;height:auto;max-height:95px;object-fit:contain;object-position:center;position:static;z-index:0;pointer-events:none}
 @media(max-width:480px){.auth-screen{padding:16px}.auth-card{padding:24px;width:100%;max-width:410px}.auth-mark{max-width:230px;margin-bottom:18px}.auth-mark img{max-width:230px;max-height:84px}}
+
+
+/* Sidebar NexusCode brand: constrain the horizontal SVG to the sidebar instead of its intrinsic 1024px width. */
+.sidebar .brand{width:100%;min-width:0;min-height:0;overflow:hidden;gap:8px;padding:0 8px 20px;align-items:center}
+.sidebar .brand-logo{display:block;width:100%;max-width:184px;height:68px;max-height:68px;min-width:0;object-fit:contain;object-position:left center;flex:1 1 auto}
+.sidebar .brand .close-nav{flex:0 0 auto}
+@media(max-width:760px){.sidebar .brand-logo{max-width:195px;height:72px;max-height:72px}}
