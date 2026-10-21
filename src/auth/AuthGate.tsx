@@ -47,32 +47,40 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
     return () => subscription.unsubscribe();
   }, []);
 
+  // Depend on the authenticated user ID, not the Session object itself.
+  // Supabase may emit TOKEN_REFRESHED when a tab becomes active; that is not a
+  // user/account change and must not unmount the app or discard in-progress forms.
+  const authenticatedUserId = session?.user.id ?? null;
+
   useEffect(() => {
-    if (!supabase || !session || recoveryMode) {
-      setMemberships([]);
-      setOrganizationId("");
-      setMembershipCheck(false);
+    if (!supabase || !authenticatedUserId || recoveryMode) {
+      if (recoveryMode || !authenticatedUserId) {
+        setMemberships([]);
+        setOrganizationId("");
+        setMembershipCheck(false);
+      }
       return;
     }
     let active = true;
-    // Never carry an organization selection across account/session changes.
-    setMemberships([]);
-    setOrganizationId("");
     setMembershipCheck(true);
     supabase.from("organization_members")
       .select("organization_id, role, organizations(name)")
-      .eq("user_id", session.user.id)
+      .eq("user_id", authenticatedUserId)
       .eq("is_active", true)
       .then(({ data, error: queryError }) => {
         if (!active) return;
         if (queryError) setError("Não foi possível validar a organização deste usuário. Verifique as políticas do Supabase.");
         const rows = (data ?? []) as unknown as Membership[];
         setMemberships(rows);
-        if (rows.length === 1) setOrganizationId(rows[0].organization_id);
+        setOrganizationId((current) => {
+          // Preserve a valid organization selection when revalidating membership.
+          if (current && rows.some((row) => row.organization_id === current)) return current;
+          return rows.length === 1 ? rows[0].organization_id : "";
+        });
         setMembershipCheck(false);
       });
     return () => { active = false; };
-  }, [session, recoveryMode]);
+  }, [authenticatedUserId, recoveryMode]);
 
   if (!isSupabaseConfigured || !supabase) {
     return <>{children({ organizationId: null, organizationName: null, userEmail: null, signOut: async () => {} })}</>;
