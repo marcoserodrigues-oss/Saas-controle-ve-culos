@@ -116,7 +116,16 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
           </div>
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
-          {activeModule === "dashboard" && organizationId ? <Dashboard organizationId={organizationId} onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : activeModule === "tires" && organizationId ? <TireManager organizationId={organizationId} /> : activeModule === "expenses" && organizationId ? <ExpensesManager organizationId={organizationId} /> : activeModule === "reports" && organizationId ? <ReportsManager organizationId={organizationId} /> : activeModule === "people" && organizationId ? <PeopleManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
+          {organizationId ? <>
+            <div hidden={activeModule !== "dashboard"}><Dashboard organizationId={organizationId} onNavigate={setActiveModule} /></div>
+            <div hidden={activeModule !== "vehicles"}><VehicleManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "fuel"}><FuelManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "maintenance"}><MaintenanceManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "tires"}><TireManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "expenses"}><ExpensesManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "reports"}><ReportsManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "people"}><PeopleManager organizationId={organizationId} /></div>
+          </> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
           <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>NexusCode - Gestão de Veículos · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
         </div>
       </main>
