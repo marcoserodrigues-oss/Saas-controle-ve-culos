@@ -169,7 +169,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     setLoading(true);
     const [t,v,p,s,e,l] = await Promise.all([
       supabase.from("tires").select("id,serial_number,brand,model,size,purchase_date,purchase_cost_cents,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
-      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,initial_meter,status,tire_layout_template_id").eq("organization_id",organizationId).eq("status","active").order("description"),
+      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,initial_meter,status,tire_layout_template_id").eq("organization_id",organizationId).neq("status","cancelled").order("description"),
       supabase.from("vehicle_tire_positions").select("id,vehicle_id,position_code,position_label,is_active").eq("organization_id",organizationId).order("position_code"),
       supabase.from("suppliers").select("id,name,supplier_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
       loadAllTireEvents(organizationId),
@@ -826,7 +826,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           <p>Você pode definir o esquema também no cadastro do veículo. Aplicar um esquema cria ou reativa as posições correspondentes e preserva os registros de histórico.</p>
         </div>
 
-        {!layoutVehicle && <div className="tire-empty"><Truck size={24}/><strong>Nenhum veículo/equipamento ativo</strong><span>Cadastre um ativo antes de definir o desenho dos pneus.</span></div>}
+        {!layoutVehicle && <div className="tire-empty"><Truck size={24}/><strong>Nenhum veículo/equipamento disponível</strong><span>Não há ativos não cancelados visíveis nesta organização. Use Atualizar e confira se o cadastro foi salvo na mesma organização.</span></div>}
         {layoutVehicle && !selectedLayoutTemplate && <div className="tire-empty"><CircleDot size={24}/><strong>Selecione um esquema de montagem</strong><span>O catálogo inclui esquemas usuais de caminhões, cavalos mecânicos e semirreboques.</span></div>}
         {layoutVehicle && selectedLayoutTemplate && <>
           <div className="tire-layout-summary">
