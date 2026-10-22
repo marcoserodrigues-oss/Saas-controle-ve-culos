@@ -353,3 +353,11 @@
 .sidebar .brand-logo{display:block;width:100%;max-width:184px;height:68px;max-height:68px;min-width:0;object-fit:contain;object-position:left center;flex:1 1 auto}
 .sidebar .brand .close-nav{flex:0 0 auto}
 @media(max-width:760px){.sidebar .brand-logo{max-width:195px;height:72px;max-height:72px}}
+
+@media (max-width: 640px) {
+  .tire-vehicle-visual { gap: 10px; padding: 8px 10px; }
+  .tire-vehicle-visual img { width: 34%; height: 58px; }
+  .tire-vehicle-visual strong { font-size: 12px; }
+  .tire-vehicle-visual span { font-size: 10px; }
+  .tire-diagram-slot.occupied { background: rgba(255,255,255,.82); }
+}
