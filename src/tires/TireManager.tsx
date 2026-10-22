@@ -833,6 +833,21 @@ export function TireManager({ organizationId }: { organizationId: string }) {
             <div><strong>{layoutVehicle.description}</strong><span>{layoutVehicle.plate ?? layoutVehicle.code} · {selectedLayoutTemplate.name}</span></div>
             <div className="tire-layout-summary-stats"><span><strong>{selectedLayoutTemplate.axle_count}</strong> eixos</span><span><strong>{selectedLayoutTemplate.tire_count}</strong> posições</span><span><strong>{layoutVehiclePositions.filter(p => p.is_active).length}</strong> posições ativas</span></div>
           </div>
+          <div className="tire-vehicle-visual" aria-label="Ilustração do tipo de veículo">
+            <img
+              src={
+                selectedLayoutTemplate.diagram_type === "trailer"
+                  ? "/vehicle-layouts/trailer.svg"
+                  : selectedLayoutTemplate.diagram_type === "tractor"
+                    ? "/vehicle-layouts/tractor.svg"
+                    : ["car", "pickup", "bus"].includes(selectedLayoutTemplate.diagram_type)
+                      ? "/vehicle-layouts/car-pickup.svg"
+                      : "/vehicle-layouts/truck-rigid.svg"
+              }
+              alt={selectedLayoutTemplate.diagram_type === "trailer" ? "Semirreboque" : selectedLayoutTemplate.diagram_type === "tractor" ? "Cavalo mecânico" : ["car", "pickup"].includes(selectedLayoutTemplate.diagram_type) ? "Carro ou caminhonete" : "Caminhão"}
+            />
+            <div><strong>{selectedLayoutTemplate.name}</strong><span>Imagem ilustrativa · frente do veículo no topo do esquema</span></div>
+          </div>
           {!layoutReady && <div className="tire-layout-warning"><AlertCircle size={17}/><span>Este esquema ainda não está totalmente aplicado ao veículo. Clique em <strong>Aplicar esquema ao veículo</strong> para criar as posições antes de iniciar a montagem.</span></div>}
           <div className="tire-layout-workspace">
             <div className="tire-diagram-card panel">
