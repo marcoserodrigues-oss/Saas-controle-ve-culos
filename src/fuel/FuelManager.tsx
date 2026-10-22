@@ -228,11 +228,11 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   return <section aria-label="Controle de abastecimentos">
     <div style={{...panel,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div><h2 style={{margin:"0 0 6px",fontSize:17}}>Controle de abastecimentos</h2><p style={{margin:0,color:"#7d899b",fontSize:12}}>Lançamentos, leituras e custos por veículo/equipamento.</p></div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button style={mutedButton} onClick={()=>setActiveView("authorizations")}><FileText size={15}/> Autorizações PDF</button>
-        <button style={mutedButton} onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Atualizar</button>
-        <button style={mutedButton} onClick={createManual} disabled={!vehicles.some(v=>v.status==="active")}><Plus size={15}/> Lançamento avulso / histórico</button>
-        <button style={button} onClick={startSettlement} disabled={loading||openAuthorizations.length===0}><CheckCircle2 size={15}/> Dar baixa em autorização ({openAuthorizations.length})</button>
+      <div className="tire-tabs fuel-action-tabs" aria-label="Ações de abastecimento">
+        <button type="button" className="tire-tab" onClick={()=>setActiveView("authorizations")}><FileText size={16}/> Autorizações PDF</button>
+        <button type="button" className="tire-tab" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Atualizar</button>
+        <button type="button" className="tire-tab" onClick={createManual} disabled={!vehicles.some(v=>v.status==="active")}><Plus size={16}/> Lançamento avulso / histórico</button>
+        <button type="button" className="tire-tab fuel-settlement-tab" onClick={startSettlement} disabled={loading||openAuthorizations.length===0}><CheckCircle2 size={16}/> Dar baixa em autorização ({openAuthorizations.length})</button>
       </div>
     </div>
     <div className="tire-tabs fuel-tabs" role="tablist" aria-label="Seções de abastecimentos">
