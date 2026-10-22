@@ -235,6 +235,10 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
         <button style={button} onClick={startSettlement} disabled={loading||openAuthorizations.length===0}><CheckCircle2 size={15}/> Dar baixa em autorização ({openAuthorizations.length})</button>
       </div>
     </div>
+    <div className="tire-tabs fuel-tabs" role="tablist" aria-label="Seções de abastecimentos">
+      <button type="button" role="tab" aria-selected="true" className="tire-tab active" onClick={()=>setActiveView("fuelings")}><Fuel size={16}/> Histórico de abastecimentos</button>
+      <button type="button" role="tab" aria-selected="false" className="tire-tab" onClick={()=>setActiveView("authorizations")}><FileText size={16}/> Autorizações PDF <span className="tire-tab-count">{openAuthorizations.length}</span></button>
+    </div>
     {error&&<div role="alert" style={{...panel,color:"#b42318",display:"flex",gap:8,alignItems:"center"}}><AlertCircle size={17}/>{error}</div>}
     {notice&&<div role="status" style={{...panel,color:"#16794b",display:"flex",gap:8,alignItems:"center"}}><CheckCircle2 size={17}/>{notice}<button style={{...mutedButton,marginLeft:"auto"}} onClick={()=>setNotice("")}><X size={14}/></button></div>}
     {!loading&&openAuthorizations.length===0&&!showForm&&<div role="status" style={{...panel,background:"#f8fafc",color:"#475569",fontSize:13}}>
