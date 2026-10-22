@@ -228,11 +228,19 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   return <section aria-label="Controle de abastecimentos">
     <div style={{...panel,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div><h2 style={{margin:"0 0 6px",fontSize:17}}>Controle de abastecimentos</h2><p style={{margin:0,color:"#7d899b",fontSize:12}}>Lançamentos, leituras e custos por veículo/equipamento.</p></div>
-      <div className="tire-tabs fuel-action-tabs" aria-label="Ações de abastecimento">
-        <button type="button" className="tire-tab" onClick={()=>setActiveView("authorizations")}><FileText size={16}/> Autorizações PDF</button>
-        <button type="button" className="tire-tab" onClick={()=>void load()} disabled={loading}><RefreshCw size={16}/> Atualizar</button>
-        <button type="button" className="tire-tab" onClick={createManual} disabled={!vehicles.some(v=>v.status==="active")}><Plus size={16}/> Lançamento avulso / histórico</button>
-        <button type="button" className="tire-tab fuel-settlement-tab" onClick={startSettlement} disabled={loading||openAuthorizations.length===0}><CheckCircle2 size={16}/> Dar baixa em autorização ({openAuthorizations.length})</button>
+      <div className="fuel-action-cards" aria-label="Ações de abastecimento" style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"stretch",marginTop:12}}>
+        <button type="button" onClick={()=>setActiveView("authorizations")} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #93c5fd",background:"linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%)",color:"#1e40af",boxShadow:"0 3px 9px rgba(37,99,235,.12)",fontWeight:700,cursor:"pointer",minHeight:46}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#2563eb",color:"#fff",boxShadow:"0 2px 5px rgba(37,99,235,.25)"}}><FileText size={17}/></span>Autorizações PDF
+        </button>
+        <button type="button" onClick={()=>void load()} disabled={loading} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #c4b5fd",background:"linear-gradient(135deg,#f5f3ff 0%,#ede9fe 100%)",color:"#5b21b6",boxShadow:"0 3px 9px rgba(109,40,217,.10)",fontWeight:700,cursor:loading?"wait":"pointer",minHeight:46,opacity:loading?.65:1}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#7c3aed",color:"#fff",boxShadow:"0 2px 5px rgba(109,40,217,.22)"}}><RefreshCw size={17}/></span>{loading?"Atualizando...":"Atualizar"}
+        </button>
+        <button type="button" onClick={createManual} disabled={!vehicles.some(v=>v.status==="active")} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #86efac",background:"linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)",color:"#166534",boxShadow:"0 3px 9px rgba(22,163,74,.10)",fontWeight:700,cursor:"pointer",minHeight:46,opacity:!vehicles.some(v=>v.status==="active")?.6:1}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#16a34a",color:"#fff",boxShadow:"0 2px 5px rgba(22,163,74,.22)"}}><Plus size={17}/></span>Lançamento avulso / histórico
+        </button>
+        <button type="button" onClick={startSettlement} disabled={loading||openAuthorizations.length===0} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #fcd34d",background:"linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%)",color:"#92400e",boxShadow:"0 3px 9px rgba(217,119,6,.12)",fontWeight:700,cursor:"pointer",minHeight:46,opacity:loading||openAuthorizations.length===0?.55:1}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#d97706",color:"#fff",boxShadow:"0 2px 5px rgba(217,119,6,.25)"}}><CheckCircle2 size={17}/></span>Dar baixa em autorização ({openAuthorizations.length})
+        </button>
       </div>
     </div>
     <div className="tire-tabs fuel-tabs" role="tablist" aria-label="Seções de abastecimentos">
