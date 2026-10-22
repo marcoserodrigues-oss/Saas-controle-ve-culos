@@ -132,6 +132,22 @@ async function loadAllTireEvents(organizationId: string) {
 
 
 
+function vehicleVisualPath(template: Pick<LayoutTemplate, "code" | "name" | "diagram_type">) {
+  const identity = (template.code + " " + template.name + " " + template.diagram_type).toLocaleLowerCase("pt-BR");
+  if (identity.includes("trailer") || identity.includes("semirreboque") || identity.includes("reboque")) return "/vehicle-layouts/trailer.svg";
+  if (identity.includes("tractor") || identity.includes("cavalo") || identity.includes("cavalo mecânico")) return "/vehicle-layouts/tractor.svg";
+  if (identity.includes("carro") || identity.includes("caminhonete") || identity.includes("pickup") || identity.includes("automóvel")) return "/vehicle-layouts/car-pickup.svg";
+  return "/vehicle-layouts/truck-rigid.svg";
+}
+
+function vehicleVisualLabel(template: Pick<LayoutTemplate, "code" | "name" | "diagram_type">) {
+  const path = vehicleVisualPath(template);
+  if (path.endsWith("trailer.svg")) return "Ilustração de semirreboque";
+  if (path.endsWith("tractor.svg")) return "Ilustração de cavalo mecânico";
+  if (path.endsWith("car-pickup.svg")) return "Ilustração de carro ou caminhonete";
+  return "Ilustração de caminhão";
+}
+
 export function TireManager({ organizationId }: { organizationId: string }) {
   const [tires, setTires] = useState<Tire[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -835,16 +851,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           </div>
           <div className="tire-vehicle-visual" aria-label="Ilustração do tipo de veículo">
             <img
-              src={
-                selectedLayoutTemplate.diagram_type === "trailer"
-                  ? "/vehicle-layouts/trailer.svg"
-                  : selectedLayoutTemplate.diagram_type === "tractor"
-                    ? "/vehicle-layouts/tractor.svg"
-                    : ["car", "pickup", "bus"].includes(selectedLayoutTemplate.diagram_type)
-                      ? "/vehicle-layouts/car-pickup.svg"
-                      : "/vehicle-layouts/truck-rigid.svg"
-              }
-              alt={selectedLayoutTemplate.diagram_type === "trailer" ? "Semirreboque" : selectedLayoutTemplate.diagram_type === "tractor" ? "Cavalo mecânico" : ["car", "pickup"].includes(selectedLayoutTemplate.diagram_type) ? "Carro ou caminhonete" : "Caminhão"}
+              src={vehicleVisualPath(selectedLayoutTemplate)}
+              alt={vehicleVisualLabel(selectedLayoutTemplate)}
             />
             <div><strong>{selectedLayoutTemplate.name}</strong><span>Imagem ilustrativa · frente do veículo no topo do esquema</span></div>
           </div>
