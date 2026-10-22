@@ -47,32 +47,40 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
     return () => subscription.unsubscribe();
   }, []);
 
+  // Depend on the authenticated user ID, not the Session object itself.
+  // Supabase may emit TOKEN_REFRESHED when a tab becomes active; that is not a
+  // user/account change and must not unmount the app or discard in-progress forms.
+  const authenticatedUserId = session?.user.id ?? null;
+
   useEffect(() => {
-    if (!supabase || !session || recoveryMode) {
-      setMemberships([]);
-      setOrganizationId("");
-      setMembershipCheck(false);
+    if (!supabase || !authenticatedUserId || recoveryMode) {
+      if (recoveryMode || !authenticatedUserId) {
+        setMemberships([]);
+        setOrganizationId("");
+        setMembershipCheck(false);
+      }
       return;
     }
     let active = true;
-    // Never carry an organization selection across account/session changes.
-    setMemberships([]);
-    setOrganizationId("");
     setMembershipCheck(true);
     supabase.from("organization_members")
       .select("organization_id, role, organizations(name)")
-      .eq("user_id", session.user.id)
+      .eq("user_id", authenticatedUserId)
       .eq("is_active", true)
       .then(({ data, error: queryError }) => {
         if (!active) return;
         if (queryError) setError("Não foi possível validar a organização deste usuário. Verifique as políticas do Supabase.");
         const rows = (data ?? []) as unknown as Membership[];
         setMemberships(rows);
-        if (rows.length === 1) setOrganizationId(rows[0].organization_id);
+        setOrganizationId((current) => {
+          // Preserve a valid organization selection when revalidating membership.
+          if (current && rows.some((row) => row.organization_id === current)) return current;
+          return rows.length === 1 ? rows[0].organization_id : "";
+        });
         setMembershipCheck(false);
       });
     return () => { active = false; };
-  }, [session, recoveryMode]);
+  }, [authenticatedUserId, recoveryMode]);
 
   if (!isSupabaseConfigured || !supabase) {
     return <>{children({ organizationId: null, organizationName: null, userEmail: null, signOut: async () => {} })}</>;
@@ -139,12 +147,12 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
     setForgotPasswordMode(false);
   };
 
-  if (checking) return <div className="auth-screen"><div className="auth-card"><div className="auth-mark">FW</div><p>Verificando sessão segura...</p></div></div>;
+  if (checking) return <div className="auth-screen"><div className="auth-card"><div className="auth-mark"><img src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" /></div><p>Verificando sessão segura...</p></div></div>;
 
   if (recoveryMode) return <div className="auth-screen">
     <form className="auth-card" onSubmit={updatePassword}>
-      <div className="auth-mark">FW</div>
-      <div className="auth-eyebrow">FLEETWISE · SEGURANÇA DA CONTA</div>
+      <div className="auth-mark"><img src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" /></div>
+      <div className="auth-eyebrow">NEXUSCODE · SEGURANÇA DA CONTA</div>
       <h1>Crie uma nova senha</h1>
       <p className="auth-description">Escolha uma senha nova para acessar sua conta com segurança.</p>
       <label>Nova senha<input type="password" autoComplete="new-password" required minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Pelo menos 8 caracteres" /></label>
@@ -157,8 +165,8 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
 
   if (!session && forgotPasswordMode) return <div className="auth-screen">
     <form className="auth-card" onSubmit={requestPasswordReset}>
-      <div className="auth-mark">FW</div>
-      <div className="auth-eyebrow">FLEETWISE · RECUPERAÇÃO DE ACESSO</div>
+      <div className="auth-mark"><img src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" /></div>
+      <div className="auth-eyebrow">NEXUSCODE · RECUPERAÇÃO DE ACESSO</div>
       <h1>Esqueceu sua senha?</h1>
       <p className="auth-description">Informe seu e-mail cadastrado. Enviaremos um link para criar uma nova senha.</p>
       <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@empresa.com" /></label>
@@ -171,8 +179,8 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
 
   if (!session) return <div className="auth-screen">
     <form className="auth-card" onSubmit={signIn}>
-      <div className="auth-mark">FW</div>
-      <div className="auth-eyebrow">FLEETWISE · GESTÃO DE FROTA</div>
+      <div className="auth-mark"><img src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" /></div>
+      <div className="auth-eyebrow">NEXUSCODE · GESTÃO DE VEÍCULOS</div>
       <h1>Acesse sua conta</h1>
       <p className="auth-description">Entre com as credenciais fornecidas pelo administrador da sua organização.</p>
       <label>E-mail<input type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="voce@empresa.com" /></label>
@@ -184,10 +192,10 @@ export function AuthGate({ children }: { children: (context: { organizationId: s
     </form>
   </div>;
 
-  if (membershipCheck) return <div className="auth-screen"><div className="auth-card"><div className="auth-mark">FW</div><p>Validando vínculo com a organização...</p></div></div>;
+  if (membershipCheck) return <div className="auth-screen"><div className="auth-card"><div className="auth-mark"><img src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" /></div><p>Validando vínculo com a organização...</p></div></div>;
 
   if (memberships.length === 0) return <div className="auth-screen">
-    <div className="auth-card"><div className="auth-mark">FW</div><h1>Organização não vinculada</h1><p className="auth-description">Sua conta está autenticada, mas ainda não tem vínculo ativo com uma organização. Solicite ao administrador que conclua o provisionamento.</p>{error && <div className="auth-error">{error}</div>}<button className="auth-submit" onClick={() => void signOut()}>Sair da conta</button></div>
+    <div className="auth-card"><div className="auth-mark"><img src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" /></div><h1>Organização não vinculada</h1><p className="auth-description">Sua conta está autenticada, mas ainda não tem vínculo ativo com uma organização. Solicite ao administrador que conclua o provisionamento.</p>{error && <div className="auth-error">{error}</div>}<button className="auth-submit" onClick={() => void signOut()}>Sair da conta</button></div>
   </div>;
 
   const selected = memberships.find((membership) => membership.organization_id === organizationId);

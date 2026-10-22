@@ -4,8 +4,9 @@ import { AlertCircle, CheckCircle2, FileText, Fuel, Pencil, Plus, RefreshCw, Sea
 import { FuelAuthorizationsManager } from "./FuelAuthorizationsManager";
 import { authorizationWorkflowStatus, isAuthorizationPendingSettlement } from "./fuelAuthorizationUtils";
 import { supabase } from "../lib/supabase";
+import { VehicleMeterReference } from "../lib/VehicleMeterReference";
 
-type Vehicle = { id: string; code: string; plate: string | null; description: string; meter_kind: string; fuel_type: string; status: string };
+type Vehicle = { id: string; code: string; plate: string | null; description: string; meter_kind: string; initial_meter: number | null; fuel_type: string; status: string };
 type Driver = { id: string; name: string; status: string };
 type Supplier = { id: string; name: string; status: string };
 type AuthorizationRow = { id: string; authorization_code: string; vehicle_id: string; driver_id: string | null; supplier_id: string | null; valid_from: string; valid_until: string; max_liters: number | string | null; max_amount_cents: number | string | null; status: string; consumed_liters: number | string; consumed_amount_cents: number | string };
@@ -31,6 +32,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   const [loading,setLoading] = useState(true);
   const [saving,setSaving] = useState(false);
   const [search,setSearch] = useState("");
+  const [reportVehicleId,setReportVehicleId] = useState("");
   const [days,setDays] = useState("30");
   const [error,setError] = useState("");
   const [notice,setNotice] = useState("");
@@ -40,7 +42,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     if (!supabase) { setError("Banco de dados não configurado."); setLoading(false); return; }
     setLoading(true);
     const [v,d,s,f] = await Promise.all([
-      supabase.from("vehicles").select("id,code,plate,description,meter_kind,fuel_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("description"),
+      supabase.from("vehicles").select("id,code,plate,description,meter_kind,initial_meter,fuel_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("description"),
       supabase.from("drivers").select("id,name,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
       supabase.from("suppliers").select("id,name,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
       supabase.from("fuel_events").select("id,vehicle_id,driver_id,supplier_id,authorization_id,occurred_at,meter_value,liters,unit_price_cents,total_cents,fueling_kind,document_number,notes,status").eq("organization_id",organizationId).neq("status","cancelled").order("occurred_at",{ascending:false}).limit(500)
@@ -99,11 +101,12 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return rows.filter(r=>{
       if(new Date(r.occurred_at).getTime()<cutoff) return false;
+      if(reportVehicleId && r.vehicle_id !== reportVehicleId) return false;
       if(!term) return true;
       const v=vehicleMap.get(r.vehicle_id);
       return [v?.description,v?.plate,v?.code,driverMap.get(r.driver_id??""),supplierMap.get(r.supplier_id??""),r.document_number,authorizationMap.get(r.authorization_id??"")?.authorization_code].some(x=>x?.toLocaleLowerCase("pt-BR").includes(term));
     });
-  },[rows,days,search,vehicleMap,driverMap,supplierMap,authorizationMap]);
+  },[rows,days,search,reportVehicleId,vehicleMap,driverMap,supplierMap,authorizationMap]);
   const liters = visible.reduce((a,r)=>a+num(r.liters),0);
   const cents = visible.reduce((a,r)=>a+num(r.total_cents ?? Math.round(num(r.liters)*num(r.unit_price_cents))),0);
   const set = (key:keyof FormValues,value:string)=>setForm(old=>({...old,[key]:value}));
@@ -193,7 +196,9 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     if(result.error){
       setError(result.error.code==="23505" && form.authorization_id
         ? "Esta autorização já recebeu baixa em outro lançamento. Atualize a lista e confira o histórico."
-        : "Não foi possível salvar o abastecimento. Confira os campos e suas permissões.");
+        : result.error.code==="23514"
+          ? result.error.message
+          : "Não foi possível salvar o abastecimento. Confira os campos e suas permissões.");
     } else if(!result.data)setError("O banco não confirmou a gravação. Atualize a lista e tente novamente.");
     else {
       setNotice(editing
@@ -223,12 +228,24 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
   return <section aria-label="Controle de abastecimentos">
     <div style={{...panel,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,flexWrap:"wrap"}}>
       <div><h2 style={{margin:"0 0 6px",fontSize:17}}>Controle de abastecimentos</h2><p style={{margin:0,color:"#7d899b",fontSize:12}}>Lançamentos, leituras e custos por veículo/equipamento.</p></div>
-      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button style={mutedButton} onClick={()=>setActiveView("authorizations")}><FileText size={15}/> Autorizações PDF</button>
-        <button style={mutedButton} onClick={()=>void load()} disabled={loading}><RefreshCw size={15}/> Atualizar</button>
-        <button style={mutedButton} onClick={createManual} disabled={!vehicles.some(v=>v.status==="active")}><Plus size={15}/> Lançamento avulso / histórico</button>
-        <button style={button} onClick={startSettlement} disabled={loading||openAuthorizations.length===0}><CheckCircle2 size={15}/> Dar baixa em autorização ({openAuthorizations.length})</button>
+      <div className="fuel-action-cards" aria-label="Ações de abastecimento" style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"stretch",marginTop:12}}>
+        <button type="button" onClick={()=>setActiveView("authorizations")} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #93c5fd",background:"linear-gradient(135deg,#eff6ff 0%,#dbeafe 100%)",color:"#1e40af",boxShadow:"0 3px 9px rgba(37,99,235,.12)",fontWeight:700,cursor:"pointer",minHeight:46}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#2563eb",color:"#fff",boxShadow:"0 2px 5px rgba(37,99,235,.25)"}}><FileText size={17}/></span>Autorizações PDF
+        </button>
+        <button type="button" onClick={()=>void load()} disabled={loading} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #c4b5fd",background:"linear-gradient(135deg,#f5f3ff 0%,#ede9fe 100%)",color:"#5b21b6",boxShadow:"0 3px 9px rgba(109,40,217,.10)",fontWeight:700,cursor:loading?"wait":"pointer",minHeight:46,opacity: loading ? 0.65 : 1}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#7c3aed",color:"#fff",boxShadow:"0 2px 5px rgba(109,40,217,.22)"}}><RefreshCw size={17}/></span>{loading?"Atualizando...":"Atualizar"}
+        </button>
+        <button type="button" onClick={createManual} disabled={!vehicles.some(v=>v.status==="active")} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #86efac",background:"linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)",color:"#166534",boxShadow:"0 3px 9px rgba(22,163,74,.10)",fontWeight:700,cursor:"pointer",minHeight:46,opacity: !vehicles.some(v=>v.status==="active") ? 0.6 : 1}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#16a34a",color:"#fff",boxShadow:"0 2px 5px rgba(22,163,74,.22)"}}><Plus size={17}/></span>Lançamento avulso / histórico
+        </button>
+        <button type="button" onClick={startSettlement} disabled={loading||openAuthorizations.length===0} style={{display:"inline-flex",alignItems:"center",gap:10,padding:"11px 15px",borderRadius:12,border:"1px solid #fcd34d",background:"linear-gradient(135deg,#fffbeb 0%,#fef3c7 100%)",color:"#92400e",boxShadow:"0 3px 9px rgba(217,119,6,.12)",fontWeight:700,cursor:"pointer",minHeight:46,opacity: (loading || openAuthorizations.length===0) ? 0.55 : 1}}>
+          <span style={{display:"grid",placeItems:"center",width:30,height:30,borderRadius:9,background:"#d97706",color:"#fff",boxShadow:"0 2px 5px rgba(217,119,6,.25)"}}><CheckCircle2 size={17}/></span>Dar baixa em autorização ({openAuthorizations.length})
+        </button>
       </div>
+    </div>
+    <div className="tire-tabs fuel-tabs" role="tablist" aria-label="Seções de abastecimentos">
+      <button type="button" role="tab" aria-selected="true" className="tire-tab active" onClick={()=>setActiveView("fuelings")}><Fuel size={16}/> Histórico de abastecimentos</button>
+      <button type="button" role="tab" aria-selected="false" className="tire-tab" onClick={()=>setActiveView("authorizations")}><FileText size={16}/> Autorizações PDF <span className="tire-tab-count">{openAuthorizations.length}</span></button>
     </div>
     {error&&<div role="alert" style={{...panel,color:"#b42318",display:"flex",gap:8,alignItems:"center"}}><AlertCircle size={17}/>{error}</div>}
     {notice&&<div role="status" style={{...panel,color:"#16794b",display:"flex",gap:8,alignItems:"center"}}><CheckCircle2 size={17}/>{notice}<button style={{...mutedButton,marginLeft:"auto"}} onClick={()=>setNotice("")}><X size={14}/></button></div>}
@@ -240,6 +257,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(210px,1fr))",gap:13}}>
         {entryMode==="settlement"&&<label style={field}>Autorização em aberto *<select required style={input} value={form.authorization_id} onChange={e=>chooseAuthorization(e.target.value)}><option value="" disabled>Selecione a autorização a dar baixa</option>{authorizationOptions.map(a=>{const v=vehicleMap.get(a.vehicle_id);const state=authorizationWorkflowStatus(a.status,a.valid_from,a.valid_until,a.consumed_liters).label;return <option key={a.id} value={a.id}>{a.authorization_code} · {v?.plate??v?.description??"Ativo"} · {state}</option>;})}</select><small style={{color:"#64748b"}}>Escolha a autorização devolvida pelo motorista. O ativo e os dados fixos serão preenchidos automaticamente.</small></label>}
         <label style={field}>Veículo/equipamento *<select required style={input} value={form.vehicle_id} disabled={entryMode==="settlement"||Boolean(selectedAuthorization)} onChange={e=>set("vehicle_id",e.target.value)}><option value="">{entryMode==="settlement"?"Preenchido pela autorização":"Selecione"}</option>{vehicles.filter(v=>v.status==="active"||v.id===form.vehicle_id).map(v=><option key={v.id} value={v.id}>{v.code} · {v.plate? v.plate+" · ":""}{v.description}</option>)}</select></label>
+        <VehicleMeterReference organizationId={organizationId} vehicleId={form.vehicle_id} meterKind={vehicleMap.get(form.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(form.vehicle_id)?.initial_meter}/>
         <label style={field}>Data e hora *<input required type="datetime-local" max={localDateTimePart()} style={input} value={form.occurred_at} onChange={e=>set("occurred_at",e.target.value)}/></label>
         <label style={field}>{vehicleMap.get(form.vehicle_id)?.meter_kind==="hourmeter"?"Horímetro (h) *":"Odômetro (km) *"}<input required type="number" min="0" step="0.1" style={input} value={form.meter_value} onChange={e=>set("meter_value",e.target.value)}/></label>
         <label style={field}>Combustível<input readOnly style={{...input,background:"#f8fafc"}} value={labels[vehicleMap.get(form.vehicle_id)?.fuel_type??""]??"Conforme cadastro do ativo"}/></label>
@@ -259,6 +277,7 @@ export function FuelManager({ organizationId }: { organizationId: string }) {
     </div>
     <div style={{...panel,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
       <label style={{...field,flex:"1 1 260px",position:"relative"}}><span style={{display:"flex",gap:7,alignItems:"center"}}><Search size={15}/> Buscar registros</span><input style={input} value={search} onChange={e=>setSearch(e.target.value)} placeholder="Veículo, placa, motorista, posto, documento"/></label>
+      <label style={field}>Veículo / equipamento<select style={input} value={reportVehicleId} onChange={e=>setReportVehicleId(e.target.value)}><option value="">Todos os veículos</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · "+v.plate : ""}</option>)}</select></label>
       <label style={field}>Período<select style={input} value={days} onChange={e=>setDays(e.target.value)}><option value="7">7 dias</option><option value="30">30 dias</option><option value="90">90 dias</option><option value="365">12 meses</option><option value="all">Todo o histórico carregado</option></select></label>
     </div>
     {loading?<div style={panel}>Carregando abastecimentos…</div>:visible.length===0?<div style={{...panel,textAlign:"center",padding:36}}><Fuel size={25}/><h3>{rows.length?"Nenhum resultado encontrado":"Nenhum abastecimento registrado"}</h3><p style={{color:"#7d899b",fontSize:12}}>{rows.length?"Ajuste o período ou a busca.":"Registre um abastecimento para começar a gerar indicadores reais."}</p></div>:<div style={{...panel,overflowX:"auto",padding:0}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:850}}><thead><tr>{["Data","Veículo","Leitura","Litros","Preço/L","Total","Motorista / posto","Tipo","Ações"].map(t=><th key={t} style={{padding:12,textAlign:"left",background:"#f8fafc",color:"#64748b",whiteSpace:"nowrap"}}>{t}</th>)}</tr></thead><tbody>{visible.map(r=>{const v=vehicleMap.get(r.vehicle_id);return <tr key={r.id} style={{borderTop:"1px solid #edf0f5"}}><td style={{padding:12,whiteSpace:"nowrap"}}>{dateLabel(r.occurred_at)}<small style={{display:"block",color:"#94a3b8"}}>{r.document_number||"Sem documento"}</small>{r.authorization_id&&authorizationMap.get(r.authorization_id)&&<small style={{display:"block",color:"#1d4ed8"}}>{authorizationMap.get(r.authorization_id)?.authorization_code}</small>}</td><td style={{padding:12}}><strong>{v?.description??"Ativo não encontrado"}</strong><small style={{display:"block",color:"#94a3b8"}}>{v?.plate??v?.code??"—"}</small></td><td style={{padding:12}}>{num(r.meter_value).toLocaleString("pt-BR")}<small style={{display:"block",color:"#94a3b8"}}>{v?.meter_kind==="hourmeter"?"h":"km"}</small></td><td style={{padding:12}}>{num(r.liters).toLocaleString("pt-BR",{maximumFractionDigits:2})} L</td><td style={{padding:12}}>{brl(num(r.unit_price_cents))}</td><td style={{padding:12}}><strong>{brl(num(r.total_cents??Math.round(num(r.liters)*num(r.unit_price_cents))))}</strong></td><td style={{padding:12}}>{driverMap.get(r.driver_id??"")??"—"}<small style={{display:"block",color:"#94a3b8"}}>{supplierMap.get(r.supplier_id??"")??"Posto não informado"}</small></td><td style={{padding:12}}>{r.fueling_kind==="full"?"Tanque cheio":"Parcial"}</td><td style={{padding:12,whiteSpace:"nowrap"}}><button style={mutedButton} aria-label="Editar abastecimento" onClick={()=>edit(r)}><Pencil size={14}/></button> <button style={{...mutedButton,color:"#b42318"}} aria-label="Cancelar abastecimento" onClick={()=>void cancel(r)}><X size={14}/></button></td></tr>})}</tbody></table></div>}

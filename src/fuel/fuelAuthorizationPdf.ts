@@ -125,7 +125,7 @@ export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPD
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(255, 255, 255);
-    doc.text("FLEETWISE", x + 4, top + 6.2);
+    doc.text("NEXUSCODE", x + 4, top + 6.2);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.6);
     doc.text(copyLabel, right - 4, top + 5.1, { align: "right" });
@@ -217,7 +217,7 @@ export function createFuelAuthorizationPdf(data: FuelAuthorizationPdfData): jsPD
 
     doc.setFontSize(5.1);
     doc.setTextColor(100, 116, 139);
-    doc.text("Documento gerado eletronicamente pelo Fleetwise.", x + 4, top + 131.2);
+    doc.text("Documento gerado eletronicamente pelo NexusCode.", x + 4, top + 131.2);
     doc.text(auth.authorization_code, right - 4, top + 131.2, { align: "right" });
   };
 

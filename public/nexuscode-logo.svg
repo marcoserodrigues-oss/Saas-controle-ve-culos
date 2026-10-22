@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="374" viewBox="0 0 1024 374" fill="none">
+  <defs>
+    <linearGradient id="metal" x1="50" y1="45" x2="340" y2="330" gradientUnits="userSpaceOnUse"><stop stop-color="#F8FCFF"/><stop offset=".48" stop-color="#8DA0AB"/><stop offset="1" stop-color="#EAF5FA"/></linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g stroke="url(#metal)" stroke-width="3.5" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M110 70V220L174 280V170L260 250V95L325 145V315"/>
+    <path d="M110 70L260 200L325 145M174 280L220 230M260 95L300 135"/>
+    <path d="M260 200L300 220" stroke="#67C7F2" stroke-width="4" filter="url(#glow)"/>
+  </g>
+  <g fill="#DCECF4" stroke="#FFFFFF" stroke-width="4" filter="url(#glow)">
+    <circle cx="110" cy="70" r="12"/><circle cx="110" cy="220" r="12"/><circle cx="174" cy="280" r="12"/><circle cx="260" cy="200" r="12"/><circle cx="325" cy="145" r="12"/><circle cx="325" cy="315" r="12"/>
+  </g>
+  <g font-family="Arial, Helvetica, sans-serif" font-weight="700" letter-spacing="2">
+    <text x="390" y="165" font-size="86" fill="#FFFFFF">NEXUS</text>
+    <text x="394" y="247" font-size="74" fill="#62A9E0" letter-spacing="19">CODE</text>
+  </g>
+</svg>
