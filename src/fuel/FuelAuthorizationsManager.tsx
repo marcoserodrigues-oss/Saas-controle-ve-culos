@@ -13,7 +13,7 @@ import { downloadFuelAuthorizationPdf, type FuelAuthorizationPdfData } from "./f
 
 type Vehicle = {
   id: string; code: string; plate: string | null; description: string; fuel_type: string;
-  meter_kind: string; status: string;
+  meter_kind: string; status: string; default_driver_id: string | null;
 };
 type Driver = {
   id: string; name: string; license_number: string | null; license_category: string | null;
@@ -118,7 +118,7 @@ export function FuelAuthorizationsManager({
     setLoading(true);
     try {
       const [vehicleResult, driverResult, supplierResult, orgResult] = await Promise.all([
-        supabase.from("vehicles").select("id,code,plate,description,fuel_type,meter_kind,status")
+        supabase.from("vehicles").select("id,code,plate,description,fuel_type,meter_kind,status,default_driver_id")
           .eq("organization_id", organizationId).order("description"),
         supabase.from("drivers").select("id,name,license_number,license_category,license_expiry,status")
           .eq("organization_id", organizationId).order("name"),
@@ -189,7 +189,8 @@ export function FuelAuthorizationsManager({
   function startCreate() {
     setDraft(blankAuthorizationDraft());
     setFormVehicleId(vehicles.find(row => row.status === "active")?.id ?? "");
-    setFormDriverId("");
+    const defaultVehicle = vehicles.find(row => row.id === (vehicles.find(v => v.status === "active")?.id ?? ""));
+    setFormDriverId(defaultVehicle?.default_driver_id && drivers.some(d => d.id === defaultVehicle.default_driver_id && d.status === "active") ? defaultVehicle.default_driver_id : "");
     setFormSupplierId("");
     setShowForm(true);
     setFormError("");
@@ -352,7 +353,7 @@ export function FuelAuthorizationsManager({
         <button type="button" aria-label="Fechar formulário" onClick={() => { setShowForm(false); setFormError(""); }} style={{ border: 0, background: "transparent", cursor: "pointer", color: "#64748b" }}><X size={18}/></button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-        <label style={labelStyle}>Veículo / equipamento *<select required value={formVehicleId} onChange={event => setFormVehicleId(event.target.value)} style={fieldStyle}><option value="">Selecione o ativo</option>{vehicles.filter(row => row.status === "active").map(row => <option key={row.id} value={row.id}>{row.code} · {row.description}{row.plate ? " · " + row.plate : ""}</option>)}</select></label>
+        <label style={labelStyle}>Veículo / equipamento *<select required value={formVehicleId} onChange={event => { const id = event.target.value; setFormVehicleId(id); const selected = vehicleMap.get(id); setFormDriverId(selected?.default_driver_id && drivers.some(d => d.id === selected.default_driver_id && d.status === "active") ? selected.default_driver_id : ""); }} style={fieldStyle}><option value="">Selecione o ativo</option>{vehicles.filter(row => row.status === "active").map(row => <option key={row.id} value={row.id}>{row.code} · {row.description}{row.plate ? " · " + row.plate : ""}</option>)}</select></label>
         <label style={labelStyle}>Motorista autorizado<select value={formDriverId} onChange={event => setFormDriverId(event.target.value)} style={fieldStyle}><option value="">Não especificado</option>{drivers.filter(row => row.status === "active").map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         <label style={labelStyle}>Posto / fornecedor autorizado<select value={formSupplierId} onChange={event => setFormSupplierId(event.target.value)} style={fieldStyle}><option value="">Qualquer fornecedor</option>{suppliers.filter(row => row.status === "active").map(row => <option key={row.id} value={row.id}>{row.name}</option>)}</select></label>
         <label style={labelStyle}>Válida a partir de *<input required type="datetime-local" value={draft.valid_from} onChange={event => setDraftField("valid_from", event.target.value)} style={fieldStyle}/></label>

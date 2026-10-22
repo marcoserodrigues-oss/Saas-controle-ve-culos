@@ -86,16 +86,32 @@ export function calculateTireLifecycleReport(
     let retreadCostCents = 0;
     let eventCostCents = 0;
     const measuredCycleKms: number[] = [];
+    const tireEvents = eventsByTire.get(tire.id) ?? [];
 
-    for (const event of eventsByTire.get(tire.id) ?? []) {
+    // When a recapagem returns, its final cost replaces the estimate/contracted
+    // amount entered on the send event. Pair each return with the oldest pending
+    // send so reports never count both values as separate expenses.
+    const supersededRetreadSendIds = new Set<string>();
+    const pendingRetreadSends: TireLifecycleEvent[] = [];
+    for (const event of tireEvents) {
+      if (event.event_type === "retread_sent") pendingRetreadSends.push(event);
+      else if (event.event_type === "retread_returned" && pendingRetreadSends.length) {
+        const pairedSend = pendingRetreadSends.shift();
+        if (pairedSend) supersededRetreadSendIds.add(pairedSend.id);
+      }
+    }
+
+    for (const event of tireEvents) {
       const meter = numericValue(event.meter_value);
       const eventCost = numericValue(event.cost_cents) ?? 0;
+      const supersededEstimate = event.event_type === "retread_sent" && supersededRetreadSendIds.has(event.id);
 
       // Acquisition cost is already stored on tires.purchase_cost_cents; excluding
-      // "purchase" events avoids counting the same purchase twice.
-      if (event.event_type !== "purchase") eventCostCents += eventCost;
+      // "purchase" events avoids counting the same purchase twice. A completed
+      // recapagem uses the return's final cost instead of its earlier estimate.
+      if (event.event_type !== "purchase" && !supersededEstimate) eventCostCents += eventCost;
       if (event.event_type === "retread_sent") retreadCount += 1;
-      if (event.event_type === "retread_sent" || event.event_type === "retread_returned") {
+      if ((event.event_type === "retread_sent" && !supersededEstimate) || event.event_type === "retread_returned") {
         retreadCostCents += eventCost;
       }
 

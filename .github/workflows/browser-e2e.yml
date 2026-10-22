@@ -1,0 +1,149 @@
+name: Browser E2E QA
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "supabase/**"
+      - "e2e/**"
+      - ".github/workflows/browser-e2e.yml"
+      - "package.json"
+      - "package-lock.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: browser-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  browser-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install application dependencies
+        run: npm install
+
+      - name: Install Playwright and Chromium
+        run: |
+          npm install --no-save --package-lock=false playwright
+          npx playwright install --with-deps chromium
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start isolated local Supabase
+        run: supabase start --exclude studio,mailpit,storage-api,edge-runtime,logflare,vector,postgres-meta,imgproxy
+
+      - name: Reset local database and apply migrations
+        run: supabase db reset --local
+
+      - name: Install PostgreSQL client for isolated QA
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Seed isolated E2E account and fleet records
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase status -o env > /tmp/supabase-local.env
+          set -a
+          source /tmp/supabase-local.env
+          set +a
+          curl --fail --silent --show-error \
+            -X POST "${API_URL}/auth/v1/admin/users" \
+            -H "apikey: ${SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            --data '{"email":"fleetwise-e2e@example.test","password":"E2E-Only-Password-2026!","email_confirm":true}' \
+            > /tmp/e2e-user.json
+          USER_ID="$(jq -er '.id' /tmp/e2e-user.json)"
+          psql "${DB_URL}" -X -v ON_ERROR_STOP=1 -v user_id="${USER_ID}" <<'SQL'
+          insert into public.organizations (id, name)
+          values ('e1000000-0000-4000-8000-000000000001', 'Fleetwise E2E QA');
+          insert into public.organization_members (organization_id, user_id, role, is_active)
+          values ('e1000000-0000-4000-8000-000000000001', :'user_id'::uuid, 'owner', true);
+          insert into public.vehicles (id, organization_id, code, plate, description, meter_kind, fuel_type, status)
+          values ('e2000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001', 'E2E-01', 'E2E1234', 'Veículo de teste E2E', 'odometer', 'diesel', 'active');
+          insert into public.fuel_authorizations
+            (id, organization_id, authorization_code, vehicle_id, valid_from, valid_until, max_liters, max_amount_cents, status)
+          values
+            ('e3000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001', 'E2E-AUTH-001',
+             'e2000000-0000-4000-8000-000000000001', now() - interval '1 day', now() + interval '30 days', 50, 100000, 'active'),
+            ('e3000000-0000-4000-8000-000000000002', 'e1000000-0000-4000-8000-000000000001', 'E2E-AUTH-AMOUNT',
+             'e2000000-0000-4000-8000-000000000001', now() - interval '1 day', now() + interval '30 days', 100, 25000, 'active');
+          insert into public.work_orders
+            (id, organization_id, vehicle_id, order_number, category, description, opened_at, meter_at_open, labor_cost_cents, parts_cost_cents, status)
+          values
+            ('e4000000-0000-4000-8000-000000000001', 'e1000000-0000-4000-8000-000000000001',
+             'e2000000-0000-4000-8000-000000000001', 'E2E-OS-001', 'corrective', 'Ordem de teste E2E',
+             '2026-10-17T12:34:00Z', 1000, 0, 0, 'open');
+          SQL
+
+      - name: Start Vite application
+        run: |
+          set -a
+          source /tmp/supabase-local.env
+          set +a
+          VITE_SUPABASE_URL="${API_URL}" VITE_SUPABASE_ANON_KEY="${ANON_KEY}" npm run dev -- --host 127.0.0.1 > /tmp/vite-e2e.log 2>&1 &
+          echo $! > /tmp/vite-e2e.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/vite-e2e.log
+          exit 1
+
+      - name: Run browser end-to-end tests
+        run: |
+          mkdir -p test-results
+          node e2e/fuel-authorization.spec.cjs
+
+      - name: Verify persisted settlement and rejected amount-cap case
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a
+          source /tmp/supabase-local.env
+          set +a
+          RESULT="$(psql "${DB_URL}" -X -v ON_ERROR_STOP=1 -Atq -c "
+            select case
+              when fa.consumed_liters = 30
+               and fa.consumed_amount_cents = 30000
+               and (select count(*) from public.fuel_events fe
+                     where fe.authorization_id = fa.id and fe.status = 'active') = 1
+               and (select count(*) from public.fuel_events fe
+                     where fe.authorization_id = 'e3000000-0000-4000-8000-000000000002') = 0
+               and (select consumed_liters from public.fuel_authorizations
+                     where id = 'e3000000-0000-4000-8000-000000000002') = 0
+              then 'PASS' else 'FAIL' end
+            from public.fuel_authorizations fa
+            where fa.id = 'e3000000-0000-4000-8000-000000000001';
+          ")"
+          test "${RESULT}" = "PASS"
+
+      - name: Upload browser diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-e2e-diagnostics
+          path: |
+            /tmp/vite-e2e.log
+            test-results/
+          if-no-files-found: ignore
+
+      - name: Stop isolated Supabase
+        if: always()
+        run: supabase stop --no-backup || true

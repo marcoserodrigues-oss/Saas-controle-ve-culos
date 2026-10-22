@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { VehicleManager } from "./vehicles/VehicleManager";
 import { FuelManager } from "./fuel/FuelManager";
@@ -10,7 +10,7 @@ import { ExpensesManager } from "./expenses/ExpensesManager";
 import { PeopleManager } from "./people/PeopleManager";
 import {
   AlertTriangle, ArrowUpRight, Bell,
-  CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel, Gauge,
+  CalendarClock, ChevronDown, CircleHelp, ClipboardList, Fuel,
   LayoutDashboard, Menu, Package, Search, Settings, ShieldCheck, Truck,
   Wrench, CircleDot, FileBarChart, Users, X
 } from "lucide-react";
@@ -46,7 +46,54 @@ function formatToday() {
 function App({ organizationId, organizationName, userEmail }: { organizationId?: string | null; organizationName?: string | null; userEmail?: string | null } = {}) {
   const userDisplayName = userEmail?.split("@")[0]?.replace(/[._-]+/g, " ") || "Usuário";
   const userInitials = userDisplayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "US";
-  const [activeModule, setActiveModule] = useState<ModuleId>("dashboard");
+  const [hasPendingFormChanges, setHasPendingFormChanges] = useState(false);
+  const [activeModule, setActiveModule] = useState<ModuleId>(() => {
+    try {
+      const saved = sessionStorage.getItem("fleetwise:activeModule");
+      return navigation.some((item) => item.id === saved) ? saved as ModuleId : "dashboard";
+    } catch {
+      return "dashboard";
+    }
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("fleetwise:activeModule", activeModule);
+    } catch {
+      // Navigation still works when browser storage is unavailable.
+    }
+  }, [activeModule]);
+  const navigateToModule = useCallback((nextModule: ModuleId) => {
+    try {
+      sessionStorage.setItem("nexuscode:scroll:" + activeModule, String(window.scrollY));
+    } catch {
+      // Navigation remains available if browser storage is unavailable.
+    }
+    setActiveModule(nextModule);
+  }, [activeModule]);
+
+  useEffect(() => {
+    let savedScroll = 0;
+    try {
+      savedScroll = Number(sessionStorage.getItem("nexuscode:scroll:" + activeModule) || 0);
+    } catch {
+      savedScroll = 0;
+    }
+    // Wait for the newly visible module to participate in layout before restoring its position.
+    requestAnimationFrame(() => window.scrollTo({ top: Math.max(0, savedScroll), behavior: "instant" as ScrollBehavior }));
+  }, [activeModule]);
+
+  useEffect(() => {
+    const saveScroll = () => {
+      try {
+        sessionStorage.setItem("nexuscode:scroll:" + activeModule, String(window.scrollY));
+      } catch {
+        // Scroll memory is an enhancement; it must not interrupt normal use.
+      }
+    };
+    window.addEventListener("scroll", saveScroll, { passive: true });
+    return () => window.removeEventListener("scroll", saveScroll);
+  }, [activeModule]);
+
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [search, setSearch] = useState("");
   const activeItem = navigation.find((item) => item.id === activeModule)!;
@@ -56,8 +103,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
       {mobileNavOpen && <button className="mobile-scrim" aria-label="Fechar menu" onClick={() => setMobileNavOpen(false)} />}
       <aside className={`sidebar ${mobileNavOpen ? "sidebar-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark"><Gauge size={23} strokeWidth={2.4} /></div>
-          <div><strong>Fleet<span>wise</span></strong><small>GESTÃO INTELIGENTE</small></div>
+          <img className="brand-logo" src="/nexuscode-logo.svg" alt="NexusCode - Gestão de Veículos" />
           <button className="icon-button close-nav" onClick={() => setMobileNavOpen(false)} aria-label="Fechar menu"><X size={18} /></button>
         </div>
         <div className="company-switcher">
@@ -71,7 +117,7 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
               <p className="nav-heading">{group}</p>
               {navigation.filter((item) => item.group === group).map((item) => {
                 const Icon = item.icon;
-                return <button key={item.id} className={`nav-item ${activeModule === item.id ? "nav-item-active" : ""}`} onClick={() => { setActiveModule(item.id); setMobileNavOpen(false); }}>
+                return <button key={item.id} className={`nav-item ${activeModule === item.id ? "nav-item-active" : ""}`} onClick={() => { if (activeModule !== item.id && hasPendingFormChanges && !window.confirm("Há um cadastro ou alteração em andamento. Se sair deste módulo, o rascunho será mantido para você continuar depois. Deseja trocar de módulo?")) return; navigateToModule(item.id); setMobileNavOpen(false); setHasPendingFormChanges(false); }}>
                   <Icon size={18} strokeWidth={1.8} /><span>{item.label}</span>
                   {item.id === "tires" && <span className="nav-dot" />}
                 </button>;
@@ -80,13 +126,13 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>Precisa de ajuda?</strong><p>Consulte a documentação e as regras do sistema.</p><button onClick={() => setActiveModule("reports")}>Ver orientações <span>↗</span></button></div>
-          <button className="nav-item settings-item" onClick={() => setActiveModule("people")}><Settings size={18} /><span>Configurações</span></button>
+          <div className="help-card"><div className="help-icon"><CircleHelp size={17} /></div><strong>Precisa de ajuda?</strong><p>Consulte a documentação e as regras do sistema.</p><button onClick={() => navigateToModule("reports")}>Ver orientações <span>↗</span></button></div>
+          <button className="nav-item settings-item" onClick={() => navigateToModule("people")}><Settings size={18} /><span>Configurações</span></button>
           <div className="user-profile"><div className="user-avatar">{userInitials}</div><div className="user-copy"><strong>{userDisplayName}</strong><span>{userEmail ?? "Conta autenticada"}</span></div><ChevronDown size={16} className="muted" /></div>
         </div>
       </aside>
 
-      <main className="main-content">
+      <main className="main-content" onChange={(event) => { const target = event.target as HTMLElement; if (target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement) setHasPendingFormChanges(true); }}>
         <header className="topbar">
           <div className="topbar-left"><button className="icon-button mobile-menu" onClick={() => setMobileNavOpen(true)} aria-label="Abrir menu"><Menu size={20} /></button><div className="breadcrumb">Frota <span>/</span> <strong>{activeItem.label}</strong></div></div>
           <div className="topbar-actions">
@@ -103,8 +149,17 @@ function App({ organizationId, organizationName, userEmail }: { organizationId?:
           </div>
 
           {!isSupabaseConfigured && <div className="connection-notice" role="status"><div><strong>Banco de dados ainda não conectado</strong><p>Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY na Vercel ou no arquivo .env.local. O sistema não está salvando registros.</p></div><span>Configuração pendente</span></div>}
-          {activeModule === "dashboard" && organizationId ? <Dashboard organizationId={organizationId} onNavigate={setActiveModule} /> : activeModule === "vehicles" && organizationId ? <VehicleManager organizationId={organizationId} /> : activeModule === "fuel" && organizationId ? <FuelManager organizationId={organizationId} /> : activeModule === "maintenance" && organizationId ? <MaintenanceManager organizationId={organizationId} /> : activeModule === "tires" && organizationId ? <TireManager organizationId={organizationId} /> : activeModule === "expenses" && organizationId ? <ExpensesManager organizationId={organizationId} /> : activeModule === "reports" && organizationId ? <ReportsManager organizationId={organizationId} /> : activeModule === "people" && organizationId ? <PeopleManager organizationId={organizationId} /> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
-          <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>Fleetwise · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
+          {organizationId ? <>
+            <div hidden={activeModule !== "dashboard"}><Dashboard organizationId={organizationId} onNavigate={navigateToModule} /></div>
+            <div hidden={activeModule !== "vehicles"}><VehicleManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "fuel"}><FuelManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "maintenance"}><MaintenanceManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "tires"}><TireManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "expenses"}><ExpensesManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "reports"}><ReportsManager organizationId={organizationId} /></div>
+            <div hidden={activeModule !== "people"}><PeopleManager organizationId={organizationId} /></div>
+          </> : <ModulePlaceholder moduleId={activeModule} description={moduleDescriptions[activeModule]} search={search} />}
+          <footer className="page-footer"><span><ShieldCheck size={14} /> Integridade de dados em primeiro lugar</span><span>NexusCode - Gestão de Veículos · Fundação do sistema <span className="footer-separator">•</span> v0.1.0</span></footer>
         </div>
       </main>
     </div>

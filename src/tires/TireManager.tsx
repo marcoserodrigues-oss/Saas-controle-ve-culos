@@ -1,29 +1,32 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DragEvent, FormEvent } from "react";
-import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, RotateCw, History, Settings2, Truck } from "lucide-react";
+import { CircleDot, Plus, Pencil, RefreshCw, Search, X, CheckCircle2, AlertCircle, History, Settings2, Truck, Trash2, ClipboardList, Clock3, MapPin, LayoutGrid, HeartPulse, Recycle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { nextSequentialCode } from "../lib/automaticCode";
 import { calculateTireLifecycleReport } from "./tireLifecycle";
+import { VehicleMeterReference } from "../lib/VehicleMeterReference";
 
 type TireStatus = "in_stock" | "mounted" | "retread" | "repair" | "scrapped" | "sold";
 type EventType = "purchase" | "mount" | "dismount" | "rotation" | "transfer" | "retread_sent" | "retread_returned" | "repair" | "inspection" | "scrap" | "adjustment";
 type Tire = { id: string; serial_number: string; brand: string | null; model: string | null; size: string; purchase_date: string | null; purchase_cost_cents: number; status: TireStatus; created_at: string };
-type Vehicle = { id: string; code: string; plate: string | null; description: string; kind: string; meter_kind: string; status: string; tire_layout_template_id: string | null };
+type Vehicle = { id: string; code: string; plate: string | null; description: string; kind: string; meter_kind: string; initial_meter: number | null; status: string; tire_layout_template_id: string | null };
 type LayoutPosition = { code: string; label: string; axle: number; side: string; slot: string; x: number; y: number };
 type LayoutTemplate = { id: string; organization_id: string | null; code: string; name: string; asset_kind: string; diagram_type: string; axle_count: number; tire_count: number; description: string | null; layout: LayoutPosition[]; is_system: boolean; is_active: boolean };
 type Position = { id: string; vehicle_id: string; position_code: string; position_label: string; is_active: boolean };
 type Supplier = { id: string; name: string; supplier_type: string; status: string };
 type TireEvent = { id: string; tire_id: string; vehicle_id: string | null; position_id: string | null; event_type: EventType; occurred_at: string; created_at: string; meter_value: number | null; cost_cents: number; supplier_id: string | null; related_tire_event_id: string | null; notes: string | null; reason: string | null };
 type TireForm = { serial_number: string; brand: string; model: string; size: string; purchase_date: string; purchase_cost: string };
-type EventForm = { tire_id: string; event_type: EventType; occurred_at: string; vehicle_id: string; position_id: string; meter_value: string; cost: string; supplier_id: string; reason: string; notes: string; target_status: TireStatus };
+type EventForm = { tire_id: string; event_type: EventType; occurred_at: string; vehicle_id: string; position_id: string; meter_value: string; cost: string; retread_estimate_cost: string; supplier_id: string; reason: string; notes: string; target_status: TireStatus };
 type PositionForm = { vehicle_id: string; position_code: string; position_label: string };
+type TireDecision = { mode: "replace" | "trash"; draggedTireId: string; positionId: string | null; occupantTireId: string };
+type TireWorkflow = { mode: "replace" | "trash"; action: "stock" | "scrap" | "retread"; oldTireId: string; newTireId: string | null; positionId: string | null; stage: "dismount" | "scrap" | "retread" | "mount" };
 
 const localDatePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,10);
 const localDateTimePart = (value = new Date()) => new Date(value.getTime() - value.getTimezoneOffset() * 60000).toISOString().slice(0,16);
 const emptyTire = (): TireForm => ({ serial_number: "", brand: "", model: "", size: "", purchase_date: localDatePart(), purchase_cost: "" });
-const emptyEvent = (): EventForm => ({ tire_id: "", event_type: "mount", occurred_at: localDateTimePart(), vehicle_id: "", position_id: "", meter_value: "", cost: "", supplier_id: "", reason: "", notes: "", target_status: "in_stock" });
+const emptyEvent = (): EventForm => ({ tire_id: "", event_type: "mount", occurred_at: localDateTimePart(), vehicle_id: "", position_id: "", meter_value: "", cost: "", retread_estimate_cost: "", supplier_id: "", reason: "", notes: "", target_status: "in_stock" });
 const statusLabels: Record<TireStatus,string> = { in_stock: "Em estoque", mounted: "Montado", retread: "Em recapagem", repair: "Em reparo", scrapped: "Descartado", sold: "Vendido" };
-const eventLabels: Record<EventType,string> = { purchase: "Compra / cadastro", mount: "Montagem", dismount: "Desmontagem", rotation: "Rodízio", transfer: "Transferência", retread_sent: "Enviado para recapagem", retread_returned: "Retorno da recapagem", repair: "Reparo", inspection: "Inspeção", scrap: "Descarte", adjustment: "Ajuste de status" };
+const eventLabels: Record<EventType,string> = { purchase: "Compra / cadastro", mount: "Montagem", dismount: "Desmontagem", rotation: "Rodízio", transfer: "Transferência", retread_sent: "Enviado para remodelagem/recapagem", retread_returned: "Retorno da recapagem / entrada no estoque", repair: "Reparo", inspection: "Inspeção", scrap: "Descarte", adjustment: "Ajuste de status" };
 const eventTypes: EventType[] = ["mount","dismount","rotation","transfer","retread_sent","retread_returned","repair","inspection","scrap","adjustment"];
 const brl = (cents: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format((Number(cents) || 0) / 100);
 const dateLabel = (value: string | null) => value ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" }).format(new Date(value.includes("T") ? value : value + "T12:00:00")) : "—";
@@ -136,6 +139,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [layoutVehicleId, setLayoutVehicleId] = useState("");
   const [selectedLayoutTemplateId, setSelectedLayoutTemplateId] = useState("");
   const [layoutMoveTarget, setLayoutMoveTarget] = useState<string | null>(null);
+  const [tireDecision, setTireDecision] = useState<TireDecision | null>(null);
+  const [tireWorkflow, setTireWorkflow] = useState<TireWorkflow | null>(null);
   const [positions, setPositions] = useState<Position[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [events, setEvents] = useState<TireEvent[]>([]);
@@ -143,8 +148,10 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life" | "layout">("inventory");
+  const [tab, setTab] = useState<"inventory" | "history" | "positions" | "life" | "layout" | "retreads">("inventory");
   const [search, setSearch] = useState("");
+  const [historyVehicleId, setHistoryVehicleId] = useState("");
+  const [lifeVehicleId, setLifeVehicleId] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [showTireForm, setShowTireForm] = useState(false);
   const [editingTireId, setEditingTireId] = useState<string | null>(null);
@@ -153,13 +160,16 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   const [eventForm, setEventForm] = useState<EventForm>(emptyEvent());
   const [showPositionForm, setShowPositionForm] = useState(false);
   const [positionForm, setPositionForm] = useState<PositionForm>({ vehicle_id: "", position_code: "", position_label: "" });
+  const applyMeterReference = useCallback((value: number) => {
+    setEventForm(current => current.meter_value.trim() ? current : { ...current, meter_value: String(value) });
+  }, []);
 
   const load = useCallback(async () => {
     if (!supabase) { setError("Banco de dados não configurado."); setLoading(false); return; }
     setLoading(true);
     const [t,v,p,s,e,l] = await Promise.all([
       supabase.from("tires").select("id,serial_number,brand,model,size,purchase_date,purchase_cost_cents,status,created_at").eq("organization_id",organizationId).order("created_at",{ascending:false}),
-      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,status,tire_layout_template_id").eq("organization_id",organizationId).eq("status","active").order("description"),
+      supabase.from("vehicles").select("id,code,plate,description,kind,meter_kind,initial_meter,status,tire_layout_template_id").eq("organization_id",organizationId).neq("status","cancelled").order("description"),
       supabase.from("vehicle_tire_positions").select("id,vehicle_id,position_code,position_label,is_active").eq("organization_id",organizationId).order("position_code"),
       supabase.from("suppliers").select("id,name,supplier_type,status").eq("organization_id",organizationId).neq("status","cancelled").order("name"),
       loadAllTireEvents(organizationId),
@@ -215,14 +225,23 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       return !term || [t.serial_number,t.brand ?? "",t.model ?? "",t.size,vehicle?.description ?? "",vehicle?.plate ?? ""].some(v => v.toLocaleLowerCase("pt-BR").includes(term));
     });
   }, [tires,search,statusFilter,latestPlacement,vehicleMap]);
+  const filteredLifeTires = useMemo(() => {
+    if (!lifeVehicleId) return filteredTires;
+    return filteredTires.filter(t => {
+      const place = latestPlacement.get(t.id);
+      return place?.vehicle_id === lifeVehicleId
+        || events.some(event => event.tire_id === t.id && event.vehicle_id === lifeVehicleId);
+    });
+  }, [filteredTires,lifeVehicleId,latestPlacement,events]);
   const filteredEvents = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return events.filter(e => {
       const t = tireMap.get(e.tire_id);
       const v = e.vehicle_id ? vehicleMap.get(e.vehicle_id) : null;
+      if (historyVehicleId && e.vehicle_id !== historyVehicleId) return false;
       return !term || [t?.serial_number ?? "",t?.size ?? "",v?.description ?? "",v?.plate ?? "",eventLabels[e.event_type],e.reason ?? "",e.notes ?? ""].some(x => x.toLocaleLowerCase("pt-BR").includes(term));
     });
-  }, [events,search,tireMap,vehicleMap]);
+  }, [events,search,historyVehicleId,tireMap,vehicleMap]);
 
   const startNewTire = () => { setEditingTireId(null); setTireForm(emptyTire()); setShowTireForm(true); setError(""); setNotice(""); };
   const startEditTire = (t: Tire) => {
@@ -297,6 +316,12 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   function setEventType(type: EventType) {
     setEventForm(f => ({...f,event_type:type}));
   }
+  function eventVehicleContext(tireId: string) {
+    const placement = latestPlacement.get(tireId);
+    if (placement?.vehicle_id) return placement.vehicle_id;
+    return events.find(event => event.tire_id === tireId && event.vehicle_id)?.vehicle_id ?? "";
+  }
+
   function openEventForm(tireId = "") {
     setLayoutMoveTarget(null);
     const selected = tireId ? tireMap.get(tireId) : undefined;
@@ -304,12 +329,95 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       : selected?.status === "retread" ? "retread_returned"
       : selected?.status === "repair" ? "adjustment"
       : "mount";
-    const next = {...emptyEvent(),tire_id:tireId,event_type:defaultType,target_status:"in_stock" as TireStatus};
+    const next = {...emptyEvent(),tire_id:tireId,vehicle_id:tireId ? eventVehicleContext(tireId) : (tab === "layout" ? (layoutVehicle?.id ?? "") : ""),event_type:defaultType,target_status:"in_stock" as TireStatus};
     const placement = tireId ? latestPlacement.get(tireId) : undefined;
-    if (placement) { next.vehicle_id = placement.vehicle_id ?? ""; next.position_id = placement.position_id ?? ""; }
+    if (placement) { next.vehicle_id = placement.vehicle_id ?? next.vehicle_id; next.position_id = placement.position_id ?? ""; }
+    if (selected?.status === "retread") {
+      const lastSend = [...events].filter(e => e.tire_id === selected.id && e.event_type === "retread_sent").sort((a,b) => b.occurred_at.localeCompare(a.occurred_at))[0];
+      next.supplier_id = lastSend?.supplier_id ?? "";
+      next.reason = "Retorno da recapagem e entrada no estoque";
+    }
     setEventForm(next); setShowEventForm(true); setError(""); setNotice("");
   }
 
+
+  function beginTireWorkflow(decision: TireDecision, action: "stock" | "scrap" | "retread") {
+    const oldTire = tireMap.get(decision.occupantTireId);
+    if (!oldTire) { setError("Não foi possível localizar o pneu que ocupa a posição."); setTireDecision(null); return; }
+    const newTireId = decision.mode === "replace" ? decision.draggedTireId : null;
+    if (oldTire.status === "mounted") {
+      setTireWorkflow({ mode: decision.mode, action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage: "dismount" });
+      const place = latestPlacement.get(oldTire.id);
+      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: action === "retread" ? "retread_sent" : action === "scrap" ? "scrap" : "dismount", vehicle_id: place?.vehicle_id ?? layoutVehicle?.id ?? "", position_id: place?.position_id ?? "", reason: decision.mode === "replace" ? "Substituição pelo layout visual" : action === "retread" ? "Enviado para remodelagem/recapagem pelo layout visual" : action === "scrap" ? "Descarte pelo layout visual" : "Retirada pelo layout visual" });
+      setLayoutMoveTarget(null);
+      setShowEventForm(true);
+      setTireDecision(null);
+      setError("");
+      setNotice("Primeiro confirme a desmontagem do pneu atual. O sistema continuará a operação após cada etapa.");
+      return;
+    }
+    if (action === "scrap" || action === "retread") {
+      const stage = action === "scrap" ? "scrap" : "retread";
+      const eventType = action === "scrap" ? "scrap" : "retread_sent";
+      setTireWorkflow({ mode: decision.mode, action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage });
+      setEventForm({ ...emptyEvent(), tire_id: oldTire.id, event_type: eventType, vehicle_id: eventVehicleContext(oldTire.id) || (layoutVehicle?.id ?? ""), reason: action === "scrap" ? "Descarte pelo layout visual" : "Enviado para remodelagem/recapagem pelo layout visual" });
+      setLayoutMoveTarget(null);
+      setShowEventForm(true);
+      setTireDecision(null);
+      setError("");
+      return;
+    }
+    if (newTireId && decision.positionId) {
+      setTireWorkflow({ mode: "replace", action, oldTireId: oldTire.id, newTireId, positionId: decision.positionId, stage: "mount" });
+      setEventForm({ ...emptyEvent(), tire_id: newTireId, event_type: "mount", vehicle_id: layoutVehicle?.id ?? "", position_id: decision.positionId, reason: "Montagem pelo layout visual após retorno do pneu anterior ao estoque" });
+      setLayoutMoveTarget(decision.positionId);
+      setShowEventForm(true);
+      setTireDecision(null);
+      setError("");
+      return;
+    }
+    setTireDecision(null);
+  }
+
+  function cancelEventForm() {
+    if (tireWorkflow && tireWorkflow.stage !== "dismount") {
+      const confirmed = window.confirm(
+        "Esta operação já salvou uma etapa anterior no histórico. Se você sair agora, a substituição/retirada ficará incompleta e será necessário concluir manualmente as etapas restantes. Deseja sair mesmo assim?"
+      );
+      if (!confirmed) return;
+    }
+    setShowEventForm(false);
+    setLayoutMoveTarget(null);
+    setTireWorkflow(null);
+  }
+
+  function continueTireWorkflowAfterSave() {
+    const flow = tireWorkflow;
+    if (!flow) return;
+    if (flow.stage === "dismount" && (flow.action === "scrap" || flow.action === "retread")) {
+      const stage = flow.action === "scrap" ? "scrap" : "retread";
+      const eventType = flow.action === "scrap" ? "scrap" : "retread_sent";
+      setTireWorkflow({ ...flow, stage });
+      setEventForm({ ...emptyEvent(), tire_id: flow.oldTireId, event_type: eventType, vehicle_id: eventVehicleContext(flow.oldTireId) || (layoutVehicle?.id ?? ""), reason: flow.action === "scrap" ? "Descarte pelo layout visual" : "Enviado para remodelagem/recapagem pelo layout visual" });
+      setLayoutMoveTarget(null);
+      setShowEventForm(true);
+      setNotice(flow.action === "scrap" ? "Desmontagem registrada. Confirme agora o descarte do pneu antigo." : "Desmontagem registrada. Confirme agora o envio do pneu para remodelagem/recapagem.");
+      return;
+    }
+    if ((flow.stage === "dismount" && flow.action === "stock" && flow.newTireId) || ((flow.stage === "scrap" || flow.stage === "retread") && flow.newTireId)) {
+      const nextFlow = { ...flow, stage: "mount" as const };
+      setTireWorkflow(nextFlow);
+      setEventForm({ ...emptyEvent(), tire_id: flow.newTireId!, event_type: "mount", vehicle_id: layoutVehicle?.id ?? "", position_id: flow.positionId ?? "", reason: "Montagem pelo layout visual após substituição" });
+      setLayoutMoveTarget(flow.positionId);
+      setShowEventForm(true);
+      setNotice(flow.stage === "scrap" ? "Descarte registrado. Confirme agora a montagem do pneu novo." : "Pneu antigo devolvido ao estoque. Confirme agora a montagem do pneu novo.");
+      return;
+    }
+    setTireWorkflow(null);
+    setShowEventForm(false);
+    setLayoutMoveTarget(null);
+    setNotice(flow.stage === "mount" ? "Substituição concluída e histórico atualizado." : flow.action === "scrap" ? "Pneu desmontado e descartado. Histórico preservado." : flow.action === "retread" ? "Pneu enviado para remodelagem/recapagem. O retorno deverá ser registrado como entrada de pneu remoldado." : "Pneu desmontado e devolvido ao estoque.");
+  }
 
   async function applyLayoutTemplate() {
     if (!supabase || saving || !layoutVehicle || !selectedLayoutTemplate) return;
@@ -361,7 +469,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     }
     const occupantId = mountedTiresAtPosition.get(position.id);
     if (occupantId && tire.status === "in_stock") {
-      setError("A posição está ocupada. Para fazer um rodízio, arraste um pneu que já esteja montado para essa posição; o sistema fará a troca dos dois pneus.");
+      setTireDecision({ mode: "replace", draggedTireId: tire.id, positionId: position.id, occupantTireId: occupantId });
+      setError("");
+      setNotice("");
       return;
     }
     if (occupantId === tire.id) {
@@ -389,7 +499,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     if (!supabase || saving) return;
     const tire = tireMap.get(eventForm.tire_id);
     if (!tire) { setError("Selecione um pneu válido."); return; }
-    const kind = eventForm.event_type;
+    const kind: EventType = tireWorkflow?.action === "scrap" && tireWorkflow.stage === "dismount" && tire.status === "mounted" && eventForm.event_type === "scrap" ? "dismount" : eventForm.event_type;
     const oldStatus = tire.status;
     const vehiclePlacement = latestPlacement.get(tire.id);
     const isMounted = oldStatus === "mounted";
@@ -399,7 +509,9 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     const meter = eventForm.meter_value.trim() === "" ? null : Number(eventForm.meter_value);
     const cost = toCents(eventForm.cost);
     if (!eventForm.occurred_at || new Date(eventForm.occurred_at).getTime() > Date.now()) { setError("Informe uma data/hora válida, sem lançamento futuro."); return; }
-    if (meter !== null && (!Number.isFinite(meter) || meter < 0)) { setError("A leitura do hodômetro/horímetro deve ser zero ou maior."); return; }
+    if (!eventForm.vehicle_id) { setError("Selecione o veículo/equipamento de referência para registrar a leitura atual do pneu."); return; }
+    if (meter === null) { setError("Informe a leitura atual do hodômetro/horímetro em toda movimentação de pneus."); return; }
+    if (!Number.isFinite(meter) || meter < 0) { setError("A leitura do hodômetro/horímetro deve ser zero ou maior."); return; }
     if (!Number.isFinite(cost) || cost < 0) { setError("O custo do evento não pode ser negativo."); return; }
     if (eventForm.supplier_id && !suppliers.some(s => s.id === eventForm.supplier_id)) { setError("O fornecedor selecionado não pertence à organização."); return; }
 
@@ -413,29 +525,38 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       nextStatus = "mounted"; vehicleId = eventForm.vehicle_id; positionId = eventForm.position_id;
     } else if (kind === "dismount") {
       if (!isMounted) { setError("Somente um pneu montado pode ser desmontado."); return; }
-      nextStatus = "in_stock"; vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
+      if (vehiclePlacement?.vehicle_id && eventForm.vehicle_id !== vehiclePlacement.vehicle_id) { setError("A leitura da desmontagem deve pertencer ao mesmo veículo onde o pneu está montado."); return; }
+      nextStatus = "in_stock"; vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? null;
     } else if (kind === "retread_sent") {
-      if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes de enviá-lo para recapagem."); return; }
-      nextStatus = "retread";
+      const atomicLayoutRetread = tireWorkflow?.action === "retread" && (tireWorkflow.stage === "dismount" || tireWorkflow.stage === "retread") && oldStatus === "mounted";
+      if (oldStatus !== "in_stock" && !atomicLayoutRetread) { setError("Desmonte o pneu e deixe-o em estoque antes de enviá-lo para recapagem."); return; }
+      nextStatus = "retread"; vehicleId = eventForm.vehicle_id;
     } else if (kind === "retread_returned") {
       if (oldStatus !== "retread") { setError("O retorno só pode ser lançado para pneu em recapagem."); return; }
-      nextStatus = "in_stock";
+      nextStatus = "in_stock"; vehicleId = eventForm.vehicle_id;
     } else if (kind === "repair") {
       if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes de registrar o envio para reparo."); return; }
-      nextStatus = "repair";
+      nextStatus = "repair"; vehicleId = eventForm.vehicle_id;
     } else if (kind === "scrap") {
-      if (oldStatus !== "in_stock") { setError("Desmonte o pneu e deixe-o em estoque antes do descarte."); return; }
-      if (!window.confirm("Confirmar o descarte permanente deste pneu? O histórico será preservado.")) return;
-      nextStatus = "scrapped";
+      if (oldStatus === "mounted") { setError("Desmonte o pneu antes do descarte."); return; }
+      if (["scrapped","sold"].includes(oldStatus)) { setError("Este pneu já está descartado ou vendido."); return; }
+      if (!eventForm.reason.trim()) { setError("Informe o motivo do descarte."); return; }
+      if (!window.confirm("Confirmar o descarte do pneu " + tire.serial_number + "?\nMotivo: " + eventForm.reason.trim() + "\nO histórico será preservado.")) return;
+      nextStatus = "scrapped"; vehicleId = eventForm.vehicle_id; positionId = vehiclePlacement?.position_id ?? null;
     } else if (kind === "inspection") {
-      vehicleId = vehiclePlacement?.vehicle_id ?? (eventForm.vehicle_id || null); positionId = vehiclePlacement?.position_id ?? (eventForm.position_id || null);
+      vehicleId = isMounted ? (vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id) : eventForm.vehicle_id;
+      positionId = isMounted ? (vehiclePlacement?.position_id ?? (eventForm.position_id || null)) : (eventForm.position_id || null);
     } else if (kind === "adjustment") {
       nextStatus = eventForm.target_status;
       if (nextStatus === "mounted") {
         if (!eventForm.vehicle_id || !eventForm.position_id) { setError("Para ajustar o status para montado, informe veículo e posição."); return; }
         vehicleId = eventForm.vehicle_id; positionId = eventForm.position_id;
       } else if (isMounted) {
-        vehicleId = vehiclePlacement?.vehicle_id ?? null; positionId = vehiclePlacement?.position_id ?? null;
+        vehicleId = vehiclePlacement?.vehicle_id ?? eventForm.vehicle_id;
+        positionId = vehiclePlacement?.position_id ?? null;
+      } else {
+        vehicleId = eventForm.vehicle_id;
+        positionId = null;
       }
       if (nextStatus === "scrapped" && oldStatus !== "scrapped" && !window.confirm("Confirmar ajuste para descartado? O histórico será preservado.")) return;
     }
@@ -447,6 +568,32 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       if (!targetPosition) { setError("A posição selecionada não está ativa ou não pertence ao veículo escolhido."); return; }
       const occupant = mountedTiresAtPosition.get(targetPosition.id);
       if (occupant && occupant !== tire.id && !layoutMoveTarget) { setError("Esta posição já está ocupada por outro pneu. Use o desenho para trocar posições por arrasto, ou desmonte o pneu atual primeiro."); return; }
+    }
+
+    if (tireWorkflow?.action === "retread" && (tireWorkflow.stage === "dismount" || tireWorkflow.stage === "retread") && (kind === "dismount" || kind === "retread_sent")) {
+      setSaving(true); setError(""); setNotice("");
+      const result = await supabase.rpc("send_tire_to_retread", {
+        p_tire_id: tire.id,
+        p_vehicle_id: eventForm.vehicle_id,
+        p_meter_value: meter,
+        p_occurred_at: new Date(eventForm.occurred_at).toISOString(),
+        p_dismount_cost_cents: 0,
+        p_retread_estimate_cents: 0,
+        p_supplier_id: eventForm.supplier_id || null,
+        p_reason: eventForm.reason.trim() || null,
+        p_notes: eventForm.notes.trim() || null
+      });
+      if (result.error || !result.data) {
+        setError("Não foi possível registrar a desmontagem e o envio para recapagem. " + (result.error?.message ?? ""));
+      } else {
+        setShowEventForm(false);
+        setLayoutMoveTarget(null);
+        setTireWorkflow(null);
+        setNotice("Desmontagem e envio para recapagem registrados juntos. O pneu agora está Em recapagem.");
+        await load();
+      }
+      setSaving(false);
+      return;
     }
 
     setSaving(true); setError(""); setNotice("");
@@ -466,10 +613,15 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           : "Não foi possível movimentar o pneu pelo desenho. " + (serverMessage ? serverMessage : "Confira a posição e tente novamente."));
       } else {
         const action = (movement.data as {action?:string}).action;
-        setShowEventForm(false);
-        setLayoutMoveTarget(null);
-        setNotice(action === "swap" ? "Rodízio/troca de posições registrado no histórico dos dois pneus." : action === "mount" ? "Pneu montado na posição selecionada." : "Movimentação do pneu registrada.");
-        await load();
+        if (tireWorkflow?.stage === "mount") {
+          await load();
+          continueTireWorkflowAfterSave();
+        } else {
+          setShowEventForm(false);
+          setLayoutMoveTarget(null);
+          setNotice(action === "swap" ? "Rodízio/troca de posições registrado no histórico dos dois pneus." : action === "mount" ? "Pneu montado na posição selecionada." : "Movimentação do pneu registrada.");
+          await load();
+        }
       }
       setSaving(false);
       return;
@@ -480,10 +632,25 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       setError("Não foi possível salvar o evento. Nenhum sucesso foi confirmado pelo banco.");
     } else {
       const updated = nextStatus === oldStatus ? {error:null,data:{id:tire.id}} : await supabase.from("tires").update({status:nextStatus}).eq("id",tire.id).eq("organization_id",organizationId).select("id").maybeSingle();
-      setShowEventForm(false);
-      if (updated.error || !updated.data) setError("O evento foi salvo no histórico, mas não foi possível atualizar o status do pneu. Atualize a tela e confira o item.");
-      else setNotice("Evento registrado no histórico do pneu.");
-      await load();
+      if (updated.error || !updated.data) {
+        setError("O evento foi salvo no histórico, mas não foi possível atualizar o status do pneu. Atualize a tela e confira o item.");
+      } else if (tireWorkflow && ((tireWorkflow.stage === "dismount" && kind === "dismount") || (tireWorkflow.stage === "scrap" && kind === "scrap") || (tireWorkflow.stage === "retread" && kind === "retread_sent"))) {
+        // Atualiza o estado local antes de avançar o fluxo: continueTireWorkflowAfterSave
+        // abre a etapa seguinte e ela precisa enxergar o status novo, não o status antigo.
+        if (kind === "dismount") {
+          setTires(current => current.map(item => item.id === tire.id ? { ...item, status: "in_stock" } : item));
+        } else if (kind === "scrap") {
+          setTires(current => current.map(item => item.id === tire.id ? { ...item, status: "scrapped" } : item));
+        } else if (kind === "retread_sent") {
+          setTires(current => current.map(item => item.id === tire.id ? { ...item, status: "retread" } : item));
+        }
+        await load();
+        continueTireWorkflowAfterSave();
+      } else {
+        setShowEventForm(false);
+        setNotice("Evento registrado no histórico do pneu.");
+        await load();
+      }
     }
     setSaving(false);
   }
@@ -568,7 +735,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
     return !term || [t.serial_number,t.brand ?? "",t.model ?? "",t.size,sourceVehicle?.description ?? "",sourceVehicle?.plate ?? "",sourcePosition?.position_label ?? "",sourcePosition?.position_code ?? ""].some(v => v.toLocaleLowerCase("pt-BR").includes(term));
   }) : [];
 
-  const lifeMetricsForFiltered = filteredTires.map(t => lifeReport.get(t.id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
+  const lifeMetricsForFiltered = filteredLifeTires.map(t => lifeReport.get(t.id)).filter((r): r is NonNullable<typeof r> => Boolean(r));
   const lifeTotalCostCents = lifeMetricsForFiltered.reduce((sum, r) => sum + r.totalCostCents, 0);
   const lifeTotalKm = lifeMetricsForFiltered.reduce((sum, r) => sum + r.km, 0);
   const lifeTotalRetreads = lifeMetricsForFiltered.reduce((sum, r) => sum + r.retreadCount, 0);
@@ -579,7 +746,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
   return <section className="tire-manager">
     <div className="tire-toolbar">
       <div><h2>Gestão e ciclo de vida dos pneus</h2><p>Inventário, montagem por posição, recapagem, reparos e histórico por número de série.</p></div>
-      <div className="tire-toolbar-actions"><button className="secondary-button" onClick={() => void load()} disabled={loading || saving}><RefreshCw size={15}/> Atualizar</button><button className="primary-button" onClick={() => openEventForm()} disabled={!tires.length || saving}><Plus size={16}/> Registrar evento</button><button className="primary-button" onClick={startNewTire}><Plus size={16}/> Novo pneu</button></div>
+      <div className="tire-toolbar-actions"><button className="secondary-button" onClick={() => void load()} disabled={loading || saving}><RefreshCw size={15}/> Atualizar</button><button className="primary-button" onClick={startNewTire}><Plus size={16}/> Novo pneu</button></div>
     </div>
     {(error || notice) && <div className={error ? "vehicle-message vehicle-error" : "vehicle-message vehicle-success"} role="status">{error ? <AlertCircle size={17}/> : <CheckCircle2 size={17}/>}<span>{error || notice}</span><button className="message-close" onClick={() => {setError("");setNotice("");}} aria-label="Fechar mensagem"><X size={15}/></button></div>}
     <div className="tire-kpis">
@@ -590,18 +757,25 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       <article className="tire-kpi"><span>Custo de aquisição</span><strong>{brl(purchaseValue)}</strong><small>Valor acumulado cadastrado</small></article>
     </div>
     <div className="tire-tabs" role="tablist" aria-label="Seções de pneus">
-      <button className={tab === "inventory" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("inventory")}><CircleDot size={16}/> Inventário</button>
-      <button className={tab === "history" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("history")}><History size={16}/> Histórico de eventos</button>
-      <button className={tab === "positions" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("positions")}><Settings2 size={16}/> Posições por veículo</button>
-      <button className={tab === "layout" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("layout")}><CircleDot size={16}/> Layout visual / rodízio</button>
-      <button className={tab === "life" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("life")}><History size={16}/> Vida útil / duração</button>
+      <button className={tab === "inventory" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("inventory")}><ClipboardList size={16}/> Inventário</button>
+      <button className={tab === "history" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("history")}><Clock3 size={16}/> Histórico de eventos</button>
+      <button className={tab === "retreads" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("retreads")}><RefreshCw size={16}/> Retornos de recapagem {tires.filter(t => t.status === "retread").length > 0 && <span className="tire-tab-count">{tires.filter(t => t.status === "retread").length}</span>}</button>
+      <button className={tab === "positions" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("positions")}><MapPin size={16}/> Posições por veículo</button>
+      <button className={tab === "layout" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("layout")}><LayoutGrid size={16}/> Layout visual / rodízio</button>
+      <button className={tab === "life" ? "tire-tab active" : "tire-tab"} onClick={() => setTab("life")}><HeartPulse size={16}/> Vida útil / duração</button>
     </div>
     <div className="tire-list-toolbar">
       <label className="tire-search"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder={tab === "history" ? "Buscar pneu, veículo ou evento..." : tab === "life" ? "Buscar no relatório de vida útil..." : "Buscar série, medida ou veículo..."}/></label>
+      {tab === "history" && <select value={historyVehicleId} onChange={e => setHistoryVehicleId(e.target.value)} aria-label="Filtrar histórico por veículo"><option value="">Todos os veículos</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : ""}</option>)}</select>}
+      {tab === "life" && <select value={lifeVehicleId} onChange={e => setLifeVehicleId(e.target.value)} aria-label="Filtrar vida útil por veículo (opcional)"><option value="">Todos os pneus (sem filtro por veículo)</option>{vehicles.map(v => <option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : ""}</option>)}</select>}
       {(tab === "inventory" || tab === "life") && <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} aria-label="Filtrar por status"><option value="all">Todos os status</option>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select>}
       {tab === "positions" && <button className="primary-button" onClick={() => {setPositionForm({vehicle_id:vehicles[0]?.id ?? "",position_code:"",position_label:""});setShowPositionForm(true);setError("");}}><Plus size={16}/> Nova posição</button>}
     </div>
     {loading ? <div className="tire-empty"><RefreshCw size={22}/><strong>Carregando dados...</strong></div> : <>
+      {tab === "retreads" && <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Pneu / série</th><th>Medida</th><th>Enviado em</th><th>Recapadora</th><th>Última leitura</th><th>Ação</th></tr></thead><tbody>
+        {tires.filter(t => t.status === "retread" && (!search.trim() || [t.serial_number,t.brand ?? "",t.model ?? "",t.size].some(v => v.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))))).map(t => {const sent = [...events].filter(e => e.tire_id === t.id && e.event_type === "retread_sent").sort((a,b) => b.occurred_at.localeCompare(a.occurred_at))[0];return <tr key={t.id}><td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{[t.brand,t.model].filter(Boolean).join(" ") || "Marca/modelo não informado"}</small></div></td><td>{t.size}</td><td>{sent ? datetimeLabel(sent.occurred_at) : "Data não registrada"}</td><td>{sent?.supplier_id ? supplierMap.get(sent.supplier_id) ?? "—" : "—"}</td><td>{sent?.meter_value == null ? "—" : Number(sent.meter_value).toLocaleString("pt-BR")}</td><td><button className="primary-button" disabled={saving} onClick={() => {openEventForm(t.id);setTab("retreads");}}>Registrar retorno e custo</button></td></tr>;})}
+        {!tires.some(t => t.status === "retread" && (!search.trim() || [t.serial_number,t.brand ?? "",t.model ?? "",t.size].some(v => v.toLocaleLowerCase("pt-BR").includes(search.trim().toLocaleLowerCase("pt-BR"))))) && <tr><td colSpan={6}><div className="tire-empty"><RefreshCw size={22}/><strong>Nenhum pneu aguardando retorno</strong><span>Quando um pneu for enviado para recapagem, ele aparecerá aqui até o retorno ser confirmado.</span></div></td></tr>}
+      </tbody></table></div>}
       {tab === "inventory" && <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Pneu / série</th><th>Medida</th><th>Status</th><th>Localização atual</th><th>Compra</th><th>Uso registrado</th><th></th></tr></thead><tbody>
         {filteredTires.map(t => {const placement = latestPlacement.get(t.id);const v = placement?.vehicle_id ? vehicleMap.get(placement.vehicle_id) : null;const p = placement?.position_id ? positionMap.get(placement.position_id) : null;return <tr key={t.id}>
           <td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{[t.brand,t.model].filter(Boolean).join(" ") || "Marca/modelo não informado"}</small></div></td>
@@ -609,7 +783,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           <td>{t.status === "mounted" && v ? <div className="vehicle-name"><strong>{v.description}</strong><small>{p ? p.position_code + " · " + p.position_label : "Posição não identificada"}{v.plate ? " · " + v.plate : ""}</small></div> : "—"}</td>
           <td><div className="vehicle-name"><strong>{brl(Number(t.purchase_cost_cents))}</strong><small>{dateLabel(t.purchase_date)}</small></div></td>
           <td>{(durationKm.get(t.id) ?? 0).toLocaleString("pt-BR")} km</td>
-          <td><div className="vehicle-row-actions"><button className="secondary-button" onClick={() => openEventForm(t.id)} title="Registrar evento"><RotateCw size={15}/></button><button className="secondary-button" onClick={() => startEditTire(t)} title="Editar cadastro"><Pencil size={15}/></button></div></td>
+          <td><div className="vehicle-row-actions"><button className="secondary-button" onClick={() => { const place = latestPlacement.get(t.id); setLayoutVehicleId(place?.vehicle_id ?? layoutVehicle?.id ?? vehicles[0]?.id ?? ""); setTab("layout"); setError(""); setNotice("Selecione a operação no layout visual para movimentar este pneu."); }} title="Abrir layout visual"><Truck size={15}/></button><button className="secondary-button" onClick={() => startEditTire(t)} title="Editar cadastro"><Pencil size={15}/></button></div></td>
         </tr>;})}
         {!filteredTires.length && <tr><td colSpan={7}><div className="tire-empty"><CircleDot size={22}/><strong>Nenhum pneu encontrado</strong><span>Cadastre um pneu ou ajuste os filtros.</span></div></td></tr>}
       </tbody></table></div>}
@@ -641,13 +815,18 @@ export function TireManager({ organizationId }: { organizationId: string }) {
               {layoutTemplates.filter(t => t.asset_kind === (layoutVehicle?.kind ?? "vehicle")).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
           </label>
-          <button className="primary-button" disabled={!layoutVehicle || !selectedLayoutTemplate || saving} onClick={() => void applyLayoutTemplate()}>
-            <Settings2 size={15}/>{saving ? "Aplicando..." : layoutReady ? "Aplicar / sincronizar esquema" : "Aplicar esquema ao veículo"}
-          </button>
+          <div className="tire-layout-action-row">
+            <button className="primary-button" disabled={!layoutVehicle || !selectedLayoutTemplate || saving} onClick={() => void applyLayoutTemplate()}>
+              <Settings2 size={15}/>{saving ? "Aplicando..." : layoutReady ? "Aplicar / sincronizar esquema" : "Aplicar esquema ao veículo"}
+            </button>
+            <button className="secondary-button" disabled={!layoutVehicle || !tires.length || saving} onClick={() => openEventForm()}>
+              <Plus size={15}/> Registrar outro evento
+            </button>
+          </div>
           <p>Você pode definir o esquema também no cadastro do veículo. Aplicar um esquema cria ou reativa as posições correspondentes e preserva os registros de histórico.</p>
         </div>
 
-        {!layoutVehicle && <div className="tire-empty"><Truck size={24}/><strong>Nenhum veículo/equipamento ativo</strong><span>Cadastre um ativo antes de definir o desenho dos pneus.</span></div>}
+        {!layoutVehicle && <div className="tire-empty"><Truck size={24}/><strong>Nenhum veículo/equipamento disponível</strong><span>Não há ativos não cancelados visíveis nesta organização. Use Atualizar e confira se o cadastro foi salvo na mesma organização.</span></div>}
         {layoutVehicle && !selectedLayoutTemplate && <div className="tire-empty"><CircleDot size={24}/><strong>Selecione um esquema de montagem</strong><span>O catálogo inclui esquemas usuais de caminhões, cavalos mecânicos e semirreboques.</span></div>}
         {layoutVehicle && selectedLayoutTemplate && <>
           <div className="tire-layout-summary">
@@ -657,7 +836,8 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           {!layoutReady && <div className="tire-layout-warning"><AlertCircle size={17}/><span>Este esquema ainda não está totalmente aplicado ao veículo. Clique em <strong>Aplicar esquema ao veículo</strong> para criar as posições antes de iniciar a montagem.</span></div>}
           <div className="tire-layout-workspace">
             <div className="tire-diagram-card panel">
-              <div className="tire-diagram-heading"><div><h3>Desenho da montagem</h3><p>Arraste um pneu do estoque para uma posição vazia. Para fazer rodízio/troca, arraste um pneu montado para outra posição.</p></div><span className={layoutReady ? "tire-layout-ready" : "tire-layout-pending"}>{layoutReady ? "Esquema aplicado" : "Prévia do esquema"}</span></div>
+              <div className="tire-diagram-heading"><div><h3>Desenho da montagem</h3><p>Arraste um pneu do estoque para uma posição vazia. Arraste um pneu montado para outra posição para rodízio/troca. Clique em um pneu montado para abrir suas operações.</p></div><span className={layoutReady ? "tire-layout-ready" : "tire-layout-pending"}>{layoutReady ? "Esquema aplicado" : "Prévia do esquema"}</span></div>
+              <div className="tire-diagram-stage">
               <div className={"tire-diagram-canvas tire-diagram-" + selectedLayoutTemplate.diagram_type}>
                 <div className="tire-diagram-direction">{selectedLayoutTemplate.diagram_type === "trailer" ? "FRENTE / ENGATE" : "FRENTE DO VEÍCULO"}</div>
                 <div className="tire-diagram-body" aria-hidden="true"><span/><span/><span/></div>
@@ -683,6 +863,34 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                   </button>;
                 })}
                 <div className="tire-diagram-legend"><span><i className="legend-occupied"/> Pneu montado</span><span><i className="legend-empty"/> Posição vazia</span><span><i className="legend-inactive"/> Posição inativa</span></div>
+
+              </div>
+              <div className="tire-disposal-actions">
+                  <div className="tire-disposal-action retread" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    const tireId = e.dataTransfer.getData("text/plain");
+                    const dragged = tireMap.get(tireId);
+                    if (!layoutReady || !dragged || !["mounted","in_stock"].includes(dragged.status)) { setError("Arraste para recapagem um pneu montado neste veículo ou um pneu disponível em estoque."); return; }
+                    const place = latestPlacement.get(dragged.id);
+                    if (dragged.status === "mounted" && place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
+                    beginTireWorkflow({ mode: "trash", draggedTireId: dragged.id, positionId: place?.position_id ?? null, occupantTireId: dragged.id }, "retread");
+                    setError("");
+                  }} role="button" tabIndex={0} aria-label="Destino de recapagem: arraste um pneu montado ou em estoque">
+                    <Recycle size={25}/><span><strong>Enviar para recapagem</strong><small>Arraste um pneu montado para desmontar e enviar, ou um pneu em estoque para enviar diretamente</small></span>
+                  </div>
+                  <div className="tire-disposal-action scrap" onDragOver={e => { if (layoutReady) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; } }} onDrop={e => {
+                    e.preventDefault(); e.stopPropagation();
+                    const tireId = e.dataTransfer.getData("text/plain");
+                    const dragged = tireMap.get(tireId);
+                    if (!layoutReady || !dragged || dragged.status !== "mounted") { setError("Arraste para descarte somente um pneu montado neste veículo."); return; }
+                    const place = latestPlacement.get(dragged.id);
+                    if (place?.vehicle_id !== layoutVehicle?.id) { setError("Selecione primeiro o veículo onde o pneu está montado."); return; }
+                    beginTireWorkflow({ mode: "trash", draggedTireId: dragged.id, positionId: place?.position_id ?? null, occupantTireId: dragged.id }, "scrap");
+                    setError("");
+                  }} role="button" tabIndex={0} aria-label="Destino de descarte: arraste um pneu montado aqui">
+                    <Trash2 size={25}/><span><strong>Descartar pneu</strong><small>Arraste um pneu montado para registrar a retirada e o descarte</small></span>
+                  </div>
+                </div>
               </div>
             </div>
             <aside className="tire-stock-panel panel">
@@ -708,7 +916,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
                 })}
                 {!mountedElsewhereForLayout.length && <div className="tire-empty tire-empty-compact"><strong>Nenhum pneu montado em outro veículo</strong><span>As transferências aparecerão aqui quando houver pneus montados em outro ativo.</span></div>}
               </div>
-              <div className="tire-diagram-help"><strong>Como usar</strong><ol><li>Aplique o esquema correspondente ao veículo.</li><li>Arraste um pneu em estoque para uma posição vazia para montá-lo.</li><li>Arraste um pneu montado para outra posição para registrar um rodízio; se houver outro pneu, os dois trocarão de posição.</li><li>Confirme data, leitura e observações no formulário que será aberto.</li></ol></div>
+              <div className="tire-diagram-help"><strong>Operações de pneus</strong><ol><li>Escolha o veículo e aplique o esquema correspondente.</li><li>Arraste um pneu do estoque para uma posição vazia para montá-lo.</li><li>Arraste um pneu montado para outra posição para registrar rodízio, troca ou transferência.</li><li>Clique em um pneu montado para abrir opções como desmontagem e inspeção.</li><li>Ao retirar um pneu, escolha voltar ao estoque, enviar para remodelagem/recapagem ou descartar.</li><li>Quando o pneu voltar da reforma, registre <strong>Entrada de pneu remoldado</strong> no histórico, informando a leitura atual e o custo da reforma.</li><li>Use <strong>Registrar outro evento</strong> para reparo, inspeção ou ajuste de status.</li><li>Confirme data, leitura do veículo e observações antes de salvar.</li></ol></div>
             </aside>
           </div>
           {layoutVehiclePositions.some(p => !selectedLayoutTemplate.layout.some(lp => lp.code.toLocaleLowerCase("pt-BR") === p.position_code.toLocaleLowerCase("pt-BR"))) && <div className="tire-layout-warning"><AlertCircle size={17}/><span>Existem posições antigas fora do esquema atual. Elas não serão apagadas; confira a aba “Posições por veículo” para revisar os cadastros legados.</span></div>}
@@ -716,7 +924,7 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div>}
 
       {tab === "life" && <div className="tire-life-report">
-        <div className="tire-life-heading"><div><h3>Relatório de vida útil dos pneus</h3><p>Custos, recapagens e projeções calculados somente com os eventos e leituras registrados.</p></div></div>
+        <div className="tire-life-heading"><div><h3>Relatório de vida útil dos pneus</h3><p>Consulta individual por pneu. O filtro por veículo é opcional e considera também pneus que já passaram por esse veículo.</p></div></div>
         <div className="tire-kpis">
           <article className="tire-kpi"><span>Custo total registrado</span><strong>{brl(lifeTotalCostCents)}</strong><small>Compra + demais eventos de custo</small></article>
           <article className="tire-kpi"><span>Envios para recapagem</span><strong>{lifeTotalRetreads.toLocaleString("pt-BR")}</strong><small>Custo lançado: {brl(lifeRetreadCostCents)}</small></article>
@@ -724,13 +932,33 @@ export function TireManager({ organizationId }: { organizationId: string }) {
           <article className="tire-kpi"><span>Previsões disponíveis</span><strong>{lifeForecastCount.toLocaleString("pt-BR")}</strong><small>Exige histórico de ciclos confiável</small></article>
         </div>
         <div className="vehicle-table-wrap"><table className="vehicle-table"><thead><tr><th>Pneu / medida</th><th>Status</th><th>Ciclos encerrados</th><th>Km registrados</th><th>Média km/ciclo</th><th>Dias em ciclos concluídos</th><th>Montagem atual</th><th>Último encerramento</th><th>Recapagens</th><th>Custo total</th><th>Custo/km (reg.)</th><th>Km restantes (estim.)</th></tr></thead><tbody>
-          {filteredTires.map(t => {const r=lifeReport.get(t.id);const place=latestPlacement.get(t.id);const v=place?.vehicle_id?vehicleMap.get(place.vehicle_id):null;return <tr key={t.id}><td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{t.size}</small></div></td><td><span className={"tire-status tire-status-"+t.status}>{statusLabels[t.status] ?? t.status}</span></td><td>{(r?.cycles ?? 0).toLocaleString("pt-BR")}</td><td>{(r?.km ?? 0).toLocaleString("pt-BR")} km</td><td>{r?.averageKmPerCycle == null ? "—" : Math.round(r.averageKmPerCycle).toLocaleString("pt-BR") + " km"}</td><td>{(r?.completedDays ?? 0).toLocaleString("pt-BR")} dias</td><td>{t.status==="mounted"?(r?.activeDays ?? 0).toLocaleString("pt-BR")+" dias": "—"}<small className="tire-table-sub">{t.status==="mounted"?(v?.description ?? "Montado"): ""}</small></td><td>{dateLabel(r?.lastEndAt ?? null)}</td><td>{(r?.retreadCount ?? 0).toLocaleString("pt-BR")}</td><td>{brl(r?.totalCostCents ?? 0)}</td><td>{r?.costPerKmCents == null ? "—" : brl(r.costPerKmCents) + "/km"}</td><td>{r?.estimatedKmRemaining == null ? "—" : Math.round(r.estimatedKmRemaining).toLocaleString("pt-BR") + " km"}</td></tr>;})}
-          {!filteredTires.length && <tr><td colSpan={12}><div className="tire-empty"><History size={22}/><strong>Nenhum pneu encontrado</strong><span>Ajuste a pesquisa ou cadastre pneus e eventos.</span></div></td></tr>}
+          {filteredLifeTires.map(t => {const r=lifeReport.get(t.id);const place=latestPlacement.get(t.id);const v=place?.vehicle_id?vehicleMap.get(place.vehicle_id):null;return <tr key={t.id}><td><div className="vehicle-name"><strong>{t.serial_number}</strong><small>{t.size}</small></div></td><td><span className={"tire-status tire-status-"+t.status}>{statusLabels[t.status] ?? t.status}</span></td><td>{(r?.cycles ?? 0).toLocaleString("pt-BR")}</td><td>{(r?.km ?? 0).toLocaleString("pt-BR")} km</td><td>{r?.averageKmPerCycle == null ? "—" : Math.round(r.averageKmPerCycle).toLocaleString("pt-BR") + " km"}</td><td>{(r?.completedDays ?? 0).toLocaleString("pt-BR")} dias</td><td>{t.status==="mounted"?(r?.activeDays ?? 0).toLocaleString("pt-BR")+" dias": "—"}<small className="tire-table-sub">{t.status==="mounted"?(v?.description ?? "Montado"): ""}</small></td><td>{dateLabel(r?.lastEndAt ?? null)}</td><td>{(r?.retreadCount ?? 0).toLocaleString("pt-BR")}</td><td>{brl(r?.totalCostCents ?? 0)}</td><td>{r?.costPerKmCents == null ? "—" : brl(r.costPerKmCents) + "/km"}</td><td>{r?.estimatedKmRemaining == null ? "—" : Math.round(r.estimatedKmRemaining).toLocaleString("pt-BR") + " km"}</td></tr>;})}
+          {!filteredLifeTires.length && <tr><td colSpan={12}><div className="tire-empty"><History size={22}/><strong>Nenhum pneu encontrado</strong><span>Ajuste a pesquisa ou o filtro opcional por veículo.</span></div></td></tr>}
         </tbody></table></div>
         <p className="tire-footnote">O custo total soma o preço de aquisição com os custos lançados nos demais eventos, sem duplicar o evento inicial de compra. O custo/km usa apenas a quilometragem registrada; leituras ausentes podem tornar esse indicador incompleto.</p><p className="tire-footnote">A estimativa de km restantes só aparece com pelo menos dois ciclos concluídos com leituras completas e leituras válidas no ciclo atual. É uma referência baseada no histórico, não uma garantia de vida útil; confirme desgaste por inspeção física e orientação do fabricante.</p>
       </div>} 
     </>}
     <p className="tire-footnote">A duração em km é estimada apenas nos ciclos com montagem e desmontagem registrados no mesmo veículo e com leituras válidas. Não representa quilometragem de vida útil completa quando faltarem eventos históricos.</p>
+
+    {tireDecision && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel tire-decision-modal" role="dialog" aria-modal="true" aria-labelledby="tire-decision-title">
+      <div className="vehicle-form-heading"><div><h3 id="tire-decision-title">{tireDecision.mode === "replace" ? "Substituir pneu nesta posição?" : "Retirar pneu da montagem?"}</h3><p>O histórico será preservado. Nenhuma alteração será feita até você confirmar.</p></div><button className="icon-button" onClick={() => setTireDecision(null)} aria-label="Fechar"><X size={18}/></button></div>
+      <div className="tire-decision-summary">
+        {tireDecision.mode === "replace" ? <>
+          <p><strong>Pneu novo:</strong> {tireMap.get(tireDecision.draggedTireId)?.serial_number ?? "—"}</p>
+          <p><strong>Pneu atualmente montado:</strong> {tireMap.get(tireDecision.occupantTireId)?.serial_number ?? "—"}</p>
+          <p>O pneu atual será tratado primeiro; depois o sistema continuará com a montagem do pneu novo.</p>
+        </> : <>
+          <p><strong>Pneu:</strong> {tireMap.get(tireDecision.occupantTireId)?.serial_number ?? "—"}</p>
+          <p>Escolha o destino do pneu retirado. O sistema registrará a desmontagem antes de continuar.</p>
+        </>}
+      </div>
+      <div className="vehicle-form-actions tire-decision-actions">
+        <button type="button" className="secondary-button" onClick={() => setTireDecision(null)}>Cancelar operação</button>
+        <button type="button" className="secondary-button" disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "stock")}><Truck size={16}/> {tireDecision.mode === "replace" ? "Voltar ao estoque e montar novo" : "Voltar ao estoque"}</button>
+        <button type="button" className="secondary-button" disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "retread")}><RefreshCw size={16}/> Enviar para remodelagem</button>
+        <button type="button" className="secondary-button" style={{borderColor:"#c83e3e",color:"#c83e3e"}} disabled={saving} onClick={() => beginTireWorkflow(tireDecision, "scrap")}><Trash2 size={16}/> Descartar pneu</button>
+      </div>
+    </section></div>}
 
     {showTireForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-form-title"><div className="vehicle-form-heading"><div><h3 id="tire-form-title">{editingTireId ? "Editar pneu" : "Cadastrar pneu"}</h3><p>O número de série identifica o pneu individualmente.</p></div><button className="icon-button" onClick={() => setShowTireForm(false)} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveTire}><div className="vehicle-fields">
@@ -743,23 +971,28 @@ export function TireManager({ organizationId }: { organizationId: string }) {
       </div><div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => setShowTireForm(false)}>Cancelar</button><button className="primary-button" type="submit" disabled={saving}>{saving ? "Salvando..." : editingTireId ? "Salvar alterações" : "Cadastrar pneu"}</button></div></form>
     </section></div>}
 
-    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">Registrar evento do pneu</h3><p>O evento entra no histórico e atualiza o status operacional quando aplicável.</p></div><button className="icon-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);}} aria-label="Fechar"><X size={18}/></button></div>
+    {showEventForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-event-title"><div className="vehicle-form-heading"><div><h3 id="tire-event-title">{tireWorkflow?.action === "retread" && (tireWorkflow.stage === "dismount" || tireWorkflow.stage === "retread") ? "Enviar para recapagem" : tireWorkflow?.action === "scrap" && tireWorkflow.stage === "dismount" ? "Desmontar para descarte" : tireWorkflow?.action === "scrap" && tireWorkflow.stage === "scrap" ? "Confirmar descarte" : "Registrar evento do pneu"}</h3><p>{tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" ? "Uma única confirmação registra a desmontagem e o envio, sem etapa intermediária no estoque." : "O evento entra no histórico e atualiza o status operacional quando aplicável."}</p></div><button className="icon-button" onClick={cancelEventForm} aria-label="Fechar"><X size={18}/></button></div>
       <form onSubmit={saveEvent}><div className="vehicle-fields tire-event-fields">
-        <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? "",position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
+        <label>Pneu<select required value={eventForm.tire_id} onChange={e=>{const id=e.target.value;const placement=latestPlacement.get(id);setEventForm(f=>({...f,tire_id:id,vehicle_id:placement?.vehicle_id ?? (eventVehicleContext(id) || f.vehicle_id),position_id:placement?.position_id ?? ""}));}}><option value="">Selecione...</option>{tires.filter(t=>!["scrapped","sold"].includes(t.status) || t.id===eventForm.tire_id).map(t=><option key={t.id} value={t.id}>{t.serial_number} · {t.size} · {statusLabels[t.status]}</option>)}</select></label>
         <label>Tipo de evento<select required disabled={Boolean(layoutMoveTarget)} value={eventForm.event_type} onChange={e=>setEventType(e.target.value as EventType)}>{eventTypes.map(k=><option key={k} value={k}>{eventLabels[k]}</option>)}</select></label>
         <label>Data e hora<input required type="datetime-local" disabled={Boolean(layoutMoveTarget)} value={eventForm.occurred_at} onChange={e=>setEventForm(f=>({...f,occurred_at:e.target.value}))}/></label>
-        <label>Leitura no ativo (km/horas)<input type="number" min="0" step="0.1" value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/></label>
-        <label>Custo do evento (R$)<input type="number" min="0" step="0.01" value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/></label>
+        <label>Veículo / equipamento de referência<select value={eventForm.vehicle_id} required onChange={e=>setEventForm(f=>({...f,vehicle_id:e.target.value,position_id:"",meter_value:""}))}><option value="">Selecione...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : " · " + v.code}</option>)}</select></label>
+        <VehicleMeterReference organizationId={organizationId} vehicleId={eventForm.vehicle_id} meterKind={vehicleMap.get(eventForm.vehicle_id)?.meter_kind} initialMeter={vehicleMap.get(eventForm.vehicle_id)?.initial_meter} onReading={applyMeterReference}/>
+        <label>Leitura atual no ativo (km/horas)<input type="number" min="0" step="0.1" required value={eventForm.meter_value} onChange={e=>setEventForm(f=>({...f,meter_value:e.target.value}))}/><small>Obrigatória em toda movimentação de pneus; alimenta o histórico, a vida útil, os KPIs e os relatórios.</small></label>
+        
+        {!(tireWorkflow?.action === "retread" && tireWorkflow.stage === "dismount" && eventForm.event_type === "dismount") && <label>{eventForm.event_type === "retread_returned" ? "Custo final da recapagem (R$)" : eventForm.event_type === "retread_sent" ? "Custo estimado/contratado da recapagem (R$)" : eventForm.event_type === "dismount" ? "Custo da desmontagem (R$)" : "Custo do evento (R$)"}<input type="number" min="0" step="0.01" required={eventForm.event_type === "retread_returned"} value={eventForm.cost} onChange={e=>setEventForm(f=>({...f,cost:e.target.value}))}/>{eventForm.event_type === "retread_returned" && <small>Informe o custo final efetivamente cobrado. Este evento registra a despesa final e devolve o pneu ao estoque.</small>}</label>}
+        {tireWorkflow?.action === "retread" && (tireWorkflow.stage === "dismount" || tireWorkflow.stage === "retread") && <div className="tire-modal-hint">O envio não exige valor de recapagem. Registre o custo real somente quando o pneu retornar do fornecedor.</div>}
         <label>Fornecedor / recapadora<select value={eventForm.supplier_id} onChange={e=>setEventForm(f=>({...f,supplier_id:e.target.value}))}><option value="">Não informado</option>{suppliers.filter(s=>s.status==="active").map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-        {(needsVehiclePosition || eventForm.event_type === "inspection") && <label>Veículo / equipamento<select value={eventForm.vehicle_id} required={needsVehiclePosition} onChange={e=>setEventForm(f=>({...f,vehicle_id:e.target.value,position_id:""}))}><option value="">Selecione...</option>{vehicles.map(v=><option key={v.id} value={v.id}>{v.description}{v.plate ? " · " + v.plate : " · " + v.code}</option>)}</select></label>}
+        
         {needsVehiclePosition && <label>Posição de montagem<select required value={eventForm.position_id} onChange={e=>setEventForm(f=>({...f,position_id:e.target.value}))}><option value="">Selecione...</option>{availableEventPositions.map(p=><option key={p.id} value={p.id}>{p.position_code} · {p.position_label}</option>)}</select></label>}
         {eventForm.event_type === "adjustment" && <label>Corrigir status para<select required value={eventForm.target_status} onChange={e=>setEventForm(f=>({...f,target_status:e.target.value as TireStatus}))}>{Object.entries(statusLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>}
         <label>Motivo / referência<input maxLength={180} value={eventForm.reason} onChange={e=>setEventForm(f=>({...f,reason:e.target.value}))} placeholder="Ordem de serviço, motivo, protocolo..."/></label>
         <label className="tire-wide-field">Observações<textarea rows={3} maxLength={1000} value={eventForm.notes} onChange={e=>setEventForm(f=>({...f,notes:e.target.value}))}/></label>
       </div>
       {currentTire && <div className="tire-modal-hint">Status atual: <strong>{statusLabels[currentTire.status]}</strong>{currentLocation?.vehicle_id ? " · Local atual: " + (vehicleMap.get(currentLocation.vehicle_id)?.description ?? "veículo") + (currentLocation.position_id && positionMap.get(currentLocation.position_id) ? " / " + positionMap.get(currentLocation.position_id)!.position_label : "") : ""}</div>}
-      {eventForm.event_type === "dismount" && <div className="tire-modal-hint">A desmontagem será registrada na última posição conhecida, preservando o histórico.</div>}
-      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={() => {setShowEventForm(false);setLayoutMoveTarget(null);}}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : "Registrar no histórico"}</button></div></form>
+      {eventForm.event_type === "dismount" && tireWorkflow?.action !== "retread" && <div className="tire-modal-hint">A desmontagem será registrada na última posição conhecida, preservando o histórico.</div>}
+      {tireWorkflow?.action === "retread" && (tireWorkflow.stage === "dismount" || tireWorkflow.stage === "retread") && <div className="tire-modal-hint">Ao confirmar, o sistema registra a desmontagem e o envio como eventos vinculados e atualiza o status para <strong>Em recapagem</strong> em uma operação transacional.</div>}
+      <div className="vehicle-form-actions"><button type="button" className="secondary-button" onClick={cancelEventForm}>Cancelar</button><button className="primary-button" type="submit" disabled={saving || !eventForm.tire_id}>{saving ? "Salvando..." : tireWorkflow?.action === "retread" && (tireWorkflow.stage === "dismount" || tireWorkflow.stage === "retread") ? "Confirmar envio para recapagem" : tireWorkflow?.action === "scrap" && tireWorkflow.stage === "dismount" ? "Confirmar desmontagem" : tireWorkflow?.action === "scrap" && tireWorkflow.stage === "scrap" ? "Confirmar descarte" : "Registrar no histórico"}</button></div></form>
     </section></div>}
 
     {showPositionForm && <div className="tire-modal-backdrop" role="presentation"><section className="tire-modal panel" role="dialog" aria-modal="true" aria-labelledby="tire-position-title"><div className="vehicle-form-heading"><div><h3 id="tire-position-title">Nova posição de pneu</h3><p>Cadastre posições conforme os eixos e o layout real do veículo.</p></div><button className="icon-button" onClick={() => setShowPositionForm(false)} aria-label="Fechar"><X size={18}/></button></div>
