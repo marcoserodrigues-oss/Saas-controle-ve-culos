@@ -496,3 +496,48 @@
   .tire-diagram-canvas { height: 540px; }
   .tire-diagram-slot { width: 40px; height: 60px; }
 }
+
+
+/* Vehicle visual refresh: compact product-render card with a clear hierarchy. */
+.tire-vehicle-visual {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(170px, .85fr);
+  align-items: center;
+  gap: 18px;
+  max-width: 760px;
+  min-height: 126px;
+  margin: 14px auto 12px;
+  padding: 12px 18px;
+  overflow: hidden;
+  border: 1px solid #dbe4ee;
+  border-radius: 16px;
+  background: radial-gradient(ellipse at 22% 0%, rgba(255,255,255,.98), transparent 58%), linear-gradient(115deg,#f8fbfe,#eaf0f6);
+  box-shadow: 0 8px 24px rgba(24,43,65,.08), inset 0 1px 0 rgba(255,255,255,.95);
+}
+.tire-vehicle-visual:before {
+  content: "";
+  position: absolute;
+  left: 18px; right: 18px; bottom: 13px;
+  height: 1px;
+  background: linear-gradient(90deg,transparent,#b9c8d8,transparent);
+}
+.tire-vehicle-visual img {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100px;
+  min-width: 0;
+  object-fit: contain;
+  filter: drop-shadow(0 5px 4px rgba(34,52,73,.12));
+}
+.tire-vehicle-visual > div { position: relative; display:flex; flex-direction:column; gap:6px; min-width:0; }
+.tire-vehicle-visual strong { color:#1d3551; font-size:14px; font-weight:800; line-height:1.35; }
+.tire-vehicle-visual span { color:#687b90; font-size:11px; line-height:1.55; }
+@media(max-width:640px) {
+  .tire-vehicle-visual { grid-template-columns:minmax(0,1fr); gap:4px; padding:10px 12px; }
+  .tire-vehicle-visual img { width:100%; height:82px; }
+  .tire-vehicle-visual > div { text-align:center; gap:3px; padding-bottom:5px; }
+  .tire-vehicle-visual strong { font-size:12px; }
+  .tire-vehicle-visual span { font-size:10px; }
+}
